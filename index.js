@@ -262,11 +262,26 @@ async function pollMentionsForever() {
       const res = await twitter.v2.userMentionTimeline(me.data.id, {
         since_id: actualSinceId,
         'tweet.fields': ['referenced_tweets', 'created_at', 'entities'],
-        max_results: 20
+        max_results: 100
       });
-      console.log(`📊 API Response: ${res.data?.length || 0} mentions found`);
+      console.log(`📊 API Response: ${res._realData?.data?.length || 0} mentions found`);
+      console.log('🔍 Raw API response object:', JSON.stringify(res, null, 2));
+      
+      // Debug: Log the raw API response
+      if (res._realData?.data && res._realData.data.length > 0) {
+        console.log('🔍 Raw mentions from API:');
+        res._realData.data.forEach((mention, i) => {
+          console.log(`  ${i + 1}. ID: ${mention.id}`);
+          console.log(`     Text: ${JSON.stringify(mention.text)}`);
+          console.log(`     Created: ${mention.created_at}`);
+        });
+      } else {
+        console.log('❌ No mentions in API response');
+        console.log('❌ Raw response data:', res._realData?.data);
+        console.log('❌ Response meta:', res._realData?.meta);
+      }
 
-      const batch = res.data ?? [];
+      const batch = res._realData?.data ?? [];
       if (batch.length) {
         console.log(`📨 Found ${batch.length} new mentions`);
         // newest first from API; remember the newest
