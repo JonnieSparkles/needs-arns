@@ -27,7 +27,8 @@ const {
 const ANT_PROCESS_ID = requireEnv('ANT_PROCESS_ID');
 
 const DEFAULT_TTL_SECONDS = parseInt(process.env.DEFAULT_TTL_SECONDS || '31536000', 10);
-const POLL_INTERVAL_MS = parseInt(process.env.POLL_INTERVAL_MS || '900000', 10); // 15 minutes for free plan
+const POLL_INTERVAL_MS = parseInt(process.env.POLL_INTERVAL_MS || '930000', 10); // 15.5 minutes for free plan (with buffer)
+const RATE_LIMIT_BACKOFF_MS = 930000; // 15.5 minutes for Twitter free plan (with buffer)
 
 // ---------- wallet ----------
 function getJwkFromEnv() {
@@ -80,7 +81,41 @@ function extractTxIdFromTweetData(tweetData) {
 
 function extractUndernameFromMention(mentionText) {
   const m = mentionText.match(ASSIGN_CMD_RE);
-  return m ? m[1].toLowerCase() : null;
+  if (!m) return null;
+  
+  const undername = m[1].toLowerCase();
+  
+  // Validate undername according to ArNS rules
+  if (!isValidUndername(undername)) {
+    return null;
+  }
+  
+  return undername;
+}
+
+function isValidUndername(undername) {
+  // 1. Valid characters: 0-9, a-z, dashes, underscores
+  if (!/^[a-z0-9_-]+$/.test(undername)) {
+    return false;
+  }
+  
+  // 2. Dashes and underscores cannot be leading or trailing
+  if (undername.startsWith('-') || undername.startsWith('_') || 
+      undername.endsWith('-') || undername.endsWith('_')) {
+    return false;
+  }
+  
+  // 3. Dashes and underscores cannot be used in single character domains
+  if (undername.length === 1 && (undername.includes('-') || undername.includes('_'))) {
+    return false;
+  }
+  
+  // 4. 1 character minimum, 51 characters maximum
+  if (undername.length < 1 || undername.length > 51) {
+    return false;
+  }
+  
+  return true;
 }
 
 async function reply(twitterClient, inReplyTo, body) {
@@ -124,7 +159,8 @@ async function handleMention(twitterClient, mention) {
 
     const undername = extractUndernameFromMention(mention.text || '');
     if (!undername) {
-      console.log(`❌ No undername found in mention ${mention.id}`);
+      console.log(`❌ No valid undername found in mention ${mention.id}`);
+      await reply(twitterClient, mention.id, `❌ Invalid undername format. Use: @NeedsArNS assign <name> (1-51 chars, a-z, 0-9, - or _)`);
       return; // require 'assign <undername>'
     }
     console.log(`🏷️ Extracted undername: ${undername}`);
@@ -178,6 +214,7 @@ async function handleMention(twitterClient, mention) {
 
 // ---------- request queuing ----------
 let isProcessing = false;
+let isPolling = false;
 const processedMentions = new Set();
 
 async function processMentionQueue(twitterClient, mention) {
@@ -204,6 +241,12 @@ async function pollMentionsForever() {
   let backoffMs = POLL_INTERVAL_MS;
 
   async function pollOnce() {
+    if (isPolling) {
+      console.log('⏳ Poll already in progress, skipping...');
+      return;
+    }
+    
+    isPolling = true;
     try {
       console.log(`🔍 Fetching mentions since_id: ${sinceId || 'none'}`);
       const res = await twitter.v2.userMentionTimeline(me.data.id, {
@@ -237,14 +280,16 @@ async function pollMentionsForever() {
       
     } catch (e) {
       if (e?.code === 429) {
-        console.log(`⏳ Rate limited! Backing off for ${backoffMs/1000}s`);
+        console.log(`⏳ Rate limited! Waiting 15.5 minutes for Twitter free plan reset...`);
         console.log(`📊 Rate limit details: ${e.message || 'No details'}`);
-        backoffMs = Math.min(backoffMs * 2, 300000); // Max 5 minutes
+        backoffMs = RATE_LIMIT_BACKOFF_MS; // Wait full 15 minutes
       } else {
         console.error('poll error:', e?.message || e);
         console.error('poll error code:', e?.code);
         console.error('poll error details:', e);
       }
+    } finally {
+      isPolling = false;
     }
     
     // Schedule next poll
