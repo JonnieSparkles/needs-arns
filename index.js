@@ -183,6 +183,7 @@ async function handleMention(twitterClient, mention) {
     // Write undername -> txid on your ArNS name
     console.log(`📝 Creating ArNS record: ${undername} → ${txId}`);
     try {
+      console.log(`🔍 Using TTL: ${DEFAULT_TTL_SECONDS} seconds`);
       const { id: onchainId } = await ant.setUndernameRecord({
         undername: undername,
         transactionId: txId,
