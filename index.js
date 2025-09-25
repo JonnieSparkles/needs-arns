@@ -25,6 +25,7 @@ const {
 };
 
 const ANT_PROCESS_ID = requireEnv('ANT_PROCESS_ID');
+const WALLET_ADDRESS = process.env.WALLET_ADDRESS || 'Unknown';
 
 const DEFAULT_TTL_SECONDS = parseInt(process.env.DEFAULT_TTL_SECONDS || '31536000', 10);
 const POLL_INTERVAL_MS = parseInt(process.env.POLL_INTERVAL_MS || '930000', 10); // 15.5 minutes for free plan (with buffer)
@@ -55,6 +56,8 @@ const ant = ANT.init({
   signer: new ArweaveSigner(jwk), 
   processId: ANT_PROCESS_ID 
 });
+
+// Wallet address is set in .env file
 
 // ---------- helpers ----------
 const ARWEAVE_TXID_RE = /https?:\/\/(?:www\.)?(?:[a-z0-9-]+\.)?arweave\.net\/([A-Za-z0-9_-]{43})(?:\b|\/|\?|#)/;
@@ -313,6 +316,7 @@ app.get('/debug', (_req, res) => {
     botName: 'NeedsArNS',
     testnet: true,
     gateway: 'ar-io.dev',
+    walletAddress: WALLET_ADDRESS,
     timestamp: new Date().toISOString(),
     env: {
       hasTwitterKeys: !!(TWITTER_APP_KEY && TWITTER_APP_SECRET),
