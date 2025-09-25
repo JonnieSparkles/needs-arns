@@ -6,3 +6,6 @@ hello-bot/
 # node
 node_modules/
 npm-debug.log
+
+# misc
+notes.txt
