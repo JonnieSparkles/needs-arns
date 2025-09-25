@@ -28,8 +28,8 @@ const ANT_PROCESS_ID = requireEnv('ANT_PROCESS_ID');
 const WALLET_ADDRESS = process.env.WALLET_ADDRESS || 'Unknown';
 
 const DEFAULT_TTL_SECONDS = parseInt(process.env.DEFAULT_TTL_SECONDS || '31536000', 10);
-const POLL_INTERVAL_MS = parseInt(process.env.POLL_INTERVAL_MS || '930000', 10); // 15.5 minutes for free plan (with buffer)
-const RATE_LIMIT_BACKOFF_MS = 930000; // 15.5 minutes for Twitter free plan (with buffer)
+const POLL_INTERVAL_MS = parseInt(process.env.POLL_INTERVAL_MS || '960000', 10); // 16 minutes for free plan (with buffer)
+const RATE_LIMIT_BACKOFF_MS = 960000; // 16 minutes for Twitter free plan (with buffer)
 
 // ---------- wallet ----------
 function getJwkFromEnv() {
@@ -242,6 +242,29 @@ async function pollMentionsForever() {
 
   let sinceId;
   let backoffMs = POLL_INTERVAL_MS;
+  let isFirstPoll = true;
+  let nextPollTimer;
+
+  function startCountdown(ms) {
+    if (nextPollTimer) clearInterval(nextPollTimer);
+    
+    const totalMinutes = Math.floor(ms / 60000);
+    let remainingMs = ms;
+    
+    console.log(`⏰ Next poll in ${totalMinutes} minutes`);
+    
+    nextPollTimer = setInterval(() => {
+      remainingMs -= 60000; // Subtract 1 minute
+      const remainingMinutes = Math.floor(remainingMs / 60000);
+      
+      if (remainingMinutes > 0) {
+        console.log(`⏰ Next poll in ${remainingMinutes} minutes`);
+      } else {
+        clearInterval(nextPollTimer);
+        nextPollTimer = null;
+      }
+    }, 60000); // Update every minute
+  }
 
   async function pollOnce() {
     if (isPolling) {
@@ -249,11 +272,14 @@ async function pollMentionsForever() {
       return;
     }
     
+    console.log('🔒 Setting isPolling = true');
     isPolling = true;
     try {
-      console.log(`🔍 Fetching mentions since_id: ${sinceId || 'none'}`);
+      // On first poll, don't use since_id to catch all recent mentions
+      const actualSinceId = isFirstPoll ? undefined : sinceId;
+      console.log(`🔍 Fetching mentions since_id: ${actualSinceId || 'none'}${isFirstPoll ? ' (first poll - getting all recent)' : ''}`);
       const res = await twitter.v2.userMentionTimeline(me.data.id, {
-        since_id: sinceId,
+        since_id: actualSinceId,
         'tweet.fields': ['referenced_tweets', 'created_at', 'entities'],
         max_results: 20
       });
@@ -264,6 +290,7 @@ async function pollMentionsForever() {
         console.log(`📨 Found ${batch.length} new mentions`);
         // newest first from API; remember the newest
         sinceId = batch[0].id;
+        isFirstPoll = false;
         
         // Queue mentions for processing (oldest -> newest)
         const newMentions = batch.reverse().filter(m => !processedMentions.has(m.id));
@@ -283,7 +310,7 @@ async function pollMentionsForever() {
       
     } catch (e) {
       if (e?.code === 429) {
-        console.log(`⏳ Rate limited! Waiting 15.5 minutes for Twitter free plan reset...`);
+        console.log(`⏳ Rate limited! Waiting 16 minutes for Twitter free plan reset...`);
         console.log(`📊 Rate limit details: ${e.message || 'No details'}`);
         backoffMs = RATE_LIMIT_BACKOFF_MS; // Wait full 15 minutes
       } else {
@@ -292,11 +319,14 @@ async function pollMentionsForever() {
         console.error('poll error details:', e);
       }
     } finally {
+      console.log('🔓 Setting isPolling = false');
       isPolling = false;
+      
+      // Schedule next poll only after current poll is completely done
+      console.log(`⏰ Scheduling next poll in ${backoffMs}ms (${(backoffMs/1000/60).toFixed(1)} minutes)`);
+      startCountdown(backoffMs);
+      setTimeout(pollOnce, backoffMs);
     }
-    
-    // Schedule next poll
-    setTimeout(pollOnce, backoffMs);
   }
   
   // Wait 1 minute before first poll to give time for setup
