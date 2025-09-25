@@ -31,7 +31,7 @@ ARWEAVE_JWK_JSON={"kty":"RSA",...}
 ARWEAVE_JWK_B64=base64_encoded_wallet
 
 # Optional
-DEFAULT_TTL_SECONDS=31536000
+DEFAULT_TTL_SECONDS=60  # ArNS allows 60-86400 seconds (1 min - 24 hours)
 POLL_INTERVAL_MS=960000  # 16 minutes for Twitter free plan (1 request/15min with buffer)
 PORT=3000
 ```
@@ -96,3 +96,4 @@ The bot has been tested and confirmed working with:
 - ✅ **Multi-line Mention Support** - Handles mentions that span multiple lines
 - ✅ **Undername Validation** - Enforces ArNS naming rules (1-51 chars, a-z, 0-9, -, _)
 - ✅ **Twitter API v2 Compatibility** - Properly handles twitter-api-v2 response format
+- ✅ **TTL Compliance** - Respects ArNS TTL limits (60-86400 seconds)

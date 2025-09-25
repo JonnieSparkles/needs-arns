@@ -27,7 +27,7 @@ const {
 const ANT_PROCESS_ID = requireEnv('ANT_PROCESS_ID');
 const WALLET_ADDRESS = process.env.WALLET_ADDRESS || 'Unknown';
 
-const DEFAULT_TTL_SECONDS = parseInt(process.env.DEFAULT_TTL_SECONDS || '31536000', 10);
+const DEFAULT_TTL_SECONDS = parseInt(process.env.DEFAULT_TTL_SECONDS || '60', 10); // 60 seconds minimum
 const POLL_INTERVAL_MS = parseInt(process.env.POLL_INTERVAL_MS || '960000', 10); // 16 minutes for free plan (with buffer)
 const RATE_LIMIT_BACKOFF_MS = 960000; // 16 minutes for Twitter free plan (with buffer)
 
