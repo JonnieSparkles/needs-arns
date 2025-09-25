@@ -32,7 +32,7 @@ ARWEAVE_JWK_B64=base64_encoded_wallet
 
 # Optional
 DEFAULT_TTL_SECONDS=31536000
-POLL_INTERVAL_MS=900000  # 15 minutes for Twitter free plan (1 request/15min)
+POLL_INTERVAL_MS=960000  # 16 minutes for Twitter free plan (1 request/15min with buffer)
 PORT=3000
 ```
 
@@ -69,7 +69,7 @@ The bot has been tested and confirmed working with:
 - `http://localhost:3000/debug` - Bot status and configuration
 
 ### Bot Behavior
-- **Polling**: Checks for mentions every 15 minutes (Twitter free plan limit)
+- **Polling**: Checks for mentions every 16 minutes (Twitter free plan limit with buffer)
 - **Processing**: Mentions processed sequentially to prevent race conditions
 - **Response Time**: 1-minute delay before replying (makes it feel more natural)
 - **Error Handling**: Immediate response for errors, delayed response for success
@@ -86,10 +86,13 @@ The bot has been tested and confirmed working with:
 
 - ✅ **Testnet Ready** - Configured for ArNS testnet (ar-io.dev)
 - ✅ **Sandbox Support** - Recognizes both regular and sandbox Arweave domains
-- ✅ **Rate Limit Handling** - Respects Twitter free plan limits (15min intervals)
+- ✅ **Rate Limit Handling** - Respects Twitter free plan limits (16min intervals with buffer)
 - ✅ **Request Queuing** - Processes mentions sequentially to prevent race conditions
 - ✅ **Deduplication** - Prevents processing the same mention multiple times
 - ✅ **Enhanced Logging** - Detailed console output for debugging
 - ✅ **Health Monitoring** - Built-in health check and debug endpoints
 - ✅ **Error Handling** - Graceful error handling with user feedback
 - ✅ **Taken Undername Detection** - Handles already-taken undernames gracefully
+- ✅ **Multi-line Mention Support** - Handles mentions that span multiple lines
+- ✅ **Undername Validation** - Enforces ArNS naming rules (1-51 chars, a-z, 0-9, -, _)
+- ✅ **Twitter API v2 Compatibility** - Properly handles twitter-api-v2 response format
