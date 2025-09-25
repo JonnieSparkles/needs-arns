@@ -61,7 +61,7 @@ const ant = ANT.init({
 
 // ---------- helpers ----------
 const ARWEAVE_TXID_RE = /https?:\/\/(?:www\.)?(?:[a-z0-9-]+\.)?arweave\.net\/([A-Za-z0-9_-]{43})(?:\b|\/|\?|#)/;
-const ASSIGN_CMD_RE = /\bassign\s+([a-z0-9_]{1,63})\b/i;
+const ASSIGN_CMD_RE = /\bassign\s+([a-z0-9_-]{1,63})\b/i;
 
 async function fetchParentTweet(twitterClient, mention) {
   const replied = mention?.referenced_tweets?.find(t => t.type === 'replied_to');
@@ -83,7 +83,9 @@ function extractTxIdFromTweetData(tweetData) {
 }
 
 function extractUndernameFromMention(mentionText) {
-  const m = mentionText.match(ASSIGN_CMD_RE);
+  // Replace line breaks with spaces to handle multi-line mentions
+  const normalizedText = mentionText.replace(/\s+/g, ' ').trim();
+  const m = normalizedText.match(ASSIGN_CMD_RE);
   if (!m) return null;
   
   const undername = m[1].toLowerCase();
@@ -243,28 +245,7 @@ async function pollMentionsForever() {
   let sinceId;
   let backoffMs = POLL_INTERVAL_MS;
   let isFirstPoll = true;
-  let nextPollTimer;
-
-  function startCountdown(ms) {
-    if (nextPollTimer) clearInterval(nextPollTimer);
-    
-    const totalMinutes = Math.floor(ms / 60000);
-    let remainingMs = ms;
-    
-    console.log(`⏰ Next poll in ${totalMinutes} minutes`);
-    
-    nextPollTimer = setInterval(() => {
-      remainingMs -= 60000; // Subtract 1 minute
-      const remainingMinutes = Math.floor(remainingMs / 60000);
-      
-      if (remainingMinutes > 0) {
-        console.log(`⏰ Next poll in ${remainingMinutes} minutes`);
-      } else {
-        clearInterval(nextPollTimer);
-        nextPollTimer = null;
-      }
-    }, 60000); // Update every minute
-  }
+  // Countdown timer removed for now - was causing scheduling issues
 
   async function pollOnce() {
     if (isPolling) {
@@ -324,7 +305,6 @@ async function pollMentionsForever() {
       
       // Schedule next poll only after current poll is completely done
       console.log(`⏰ Scheduling next poll in ${backoffMs}ms (${(backoffMs/1000/60).toFixed(1)} minutes)`);
-      startCountdown(backoffMs);
       setTimeout(pollOnce, backoffMs);
     }
   }
