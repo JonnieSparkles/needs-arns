@@ -4,7 +4,7 @@ Twitter bot for ArNS (Arweave Name Service) that automatically assigns subdomain
 
 ## How it works
 
-1. User tweets an Arweave transaction ID (supports both `arweave.net` and sandbox domains)
+1. User tweets an Arweave transaction ID (gateway-agnostic - works with any Arweave gateway)
 2. Someone replies with `@yourbot assign <subdomain>`
 3. Bot creates `subdomain.yourname.ar-io.dev` → transaction ID mapping (testnet)
 4. Bot replies with confirmation and the new subdomain URL
@@ -60,9 +60,11 @@ node index.js
 ### ArNS Functionality Test
 The bot has been tested and confirmed working with:
 - ✅ Real Arweave transaction IDs
-- ✅ Both `arweave.net` and sandbox domains
+- ✅ Gateway-agnostic URL support (arweave.net, ar-io.dev, arweave.live, custom gateways)
+- ✅ Sandbox domain support
 - ✅ ArNS testnet integration
-- ✅ Rate limiting for Twitter free plan (15min intervals)
+- ✅ Rate limiting for Twitter free plan (16min intervals)
+- ✅ Single API call optimization (no extra calls for parent tweets)
 
 ### Debug Endpoints
 - `http://localhost:3000/` - Health check
@@ -84,16 +86,27 @@ The bot has been tested and confirmed working with:
 
 ## Features
 
+### Core Functionality
+- ✅ **Gateway-Agnostic** - Works with any Arweave gateway (arweave.net, ar-io.dev, arweave.live, custom domains)
 - ✅ **Testnet Ready** - Configured for ArNS testnet (ar-io.dev)
-- ✅ **Sandbox Support** - Recognizes both regular and sandbox Arweave domains
+- ✅ **Sandbox Support** - Recognizes sandbox Arweave domains
+- ✅ **TTL Compliance** - Respects ArNS TTL limits (60-86400 seconds)
+
+### Performance Optimizations  
+- ✅ **Single API Call** - Optimized to 1 Twitter API call per polling cycle using expansions
 - ✅ **Rate Limit Handling** - Respects Twitter free plan limits (16min intervals with buffer)
 - ✅ **Request Queuing** - Processes mentions sequentially to prevent race conditions
 - ✅ **Deduplication** - Prevents processing the same mention multiple times
-- ✅ **Enhanced Logging** - Detailed console output for debugging
-- ✅ **Health Monitoring** - Built-in health check and debug endpoints
+
+### User Experience
+- ✅ **Natural Response Timing** - 1-minute delay before replying to feel more human
 - ✅ **Error Handling** - Graceful error handling with user feedback
 - ✅ **Taken Undername Detection** - Handles already-taken undernames gracefully
 - ✅ **Multi-line Mention Support** - Handles mentions that span multiple lines
 - ✅ **Undername Validation** - Enforces ArNS naming rules (1-51 chars, a-z, 0-9, -, _)
+
+### Development & Monitoring
+- ✅ **Enhanced Logging** - Detailed console output for debugging
+- ✅ **Health Monitoring** - Built-in health check and debug endpoints
 - ✅ **Twitter API v2 Compatibility** - Properly handles twitter-api-v2 response format
-- ✅ **TTL Compliance** - Respects ArNS TTL limits (60-86400 seconds)
+- ✅ **Railway Ready** - Configured for easy deployment

@@ -62,7 +62,7 @@ const ant = ANT.init({
 // Wallet address is set in .env file
 
 // ---------- helpers ----------
-const ARWEAVE_TXID_RE = /https?:\/\/(?:www\.)?(?:[a-z0-9-]+\.)?arweave\.net\/([A-Za-z0-9_-]{43})(?:\b|\/|\?|#)/;
+const ARWEAVE_TXID_RE = /https?:\/\/[^\s\/]+\/([A-Za-z0-9_-]{43})(?:\b|\/|\?|#)/;
 const ASSIGN_CMD_RE = /\bassign\s+([a-z0-9_-]{1,63})\b/i;
 
 function fetchParentTweet(includes, mention) {
