@@ -162,7 +162,7 @@ function extractUndernameFromMention(mentionText) {
   const normalizedText = mentionText.replace(/\s+/g, ' ').trim();
   
   // Check if this is a valid command format: contains @NeedsArNS anywhere (handles Twitter auto-mentions)
-  const containsBot = /\b@NeedsArNS\b/i.test(normalizedText);
+  const containsBot = /@NeedsArNS\b/i.test(normalizedText);
   if (!containsBot) {
     console.log(`🚫 Not a bot command: "${normalizedText}"`);
     return null; // Not a command to our bot
@@ -173,7 +173,7 @@ function extractUndernameFromMention(mentionText) {
   
   const undername = m[1].toLowerCase();
   
-  // Validate undername according to ArNS rules
+  // Validate undername according to ArNS rules (after converting to lowercase)
   if (!isValidUndername(undername)) {
     return null;
   }
@@ -182,7 +182,7 @@ function extractUndernameFromMention(mentionText) {
 }
 
 function isValidUndername(undername) {
-  // 1. Valid characters: 0-9, a-z, dashes, underscores
+  // 1. Valid characters: 0-9, a-z, dashes, underscores (lowercase only)
   if (!/^[a-z0-9_-]+$/.test(undername)) {
     return false;
   }
