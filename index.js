@@ -2,6 +2,7 @@ import 'dotenv/config';
 import { TwitterApi } from 'twitter-api-v2';
 import { ANT, ArweaveSigner, AOProcess } from '@ar.io/sdk';
 import express from 'express';
+import fs from 'fs';
 
 // ---------- config & env ----------
 function requireEnv(name) {
@@ -36,6 +37,54 @@ const RATE_LIMIT_BACKOFF_MS = 960000; // 16 minutes for Twitter free plan (with 
 // Access control - comma-separated list of allowed usernames (without @)
 const ALLOWED_USERS = process.env.ALLOWED_USERS ? process.env.ALLOWED_USERS.split(',').map(u => u.trim().toLowerCase()) : [];
 console.log('🔐 Access control enabled for users:', ALLOWED_USERS.length > 0 ? ALLOWED_USERS : 'ALL USERS (no restrictions)');
+
+// Time-based filtering - ignore mentions older than X hours
+const MENTION_MAX_AGE_HOURS = parseInt(process.env.MENTION_MAX_AGE_HOURS || '24', 10);
+console.log(`⏰ Time filter: ignoring mentions older than ${MENTION_MAX_AGE_HOURS} hours`);
+
+// Persistent storage
+const PROCESSED_MENTIONS_FILE = 'processed_mentions.json';
+
+function saveProcessedState(processedMentions, sinceId, processedDetails = {}) {
+  try {
+    const state = {
+      processedMentions: Array.from(processedMentions),
+      processedDetails: processedDetails, // { mentionId: { undername, txId, success, timestamp, username } }
+      lastSinceId: sinceId,
+      lastUpdated: new Date().toISOString(),
+      version: '1.1'
+    };
+    fs.writeFileSync(PROCESSED_MENTIONS_FILE, JSON.stringify(state, null, 2));
+    console.log(`💾 Saved state: ${state.processedMentions.length} processed mentions, since_id: ${sinceId || 'none'}`);
+  } catch (err) {
+    console.error('❌ Failed to save processed state:', err.message);
+  }
+}
+
+function loadProcessedState() {
+  try {
+    if (!fs.existsSync(PROCESSED_MENTIONS_FILE)) {
+      console.log('📂 No existing state file found, starting fresh');
+      return { processedMentions: new Set(), sinceId: undefined, processedDetails: {} };
+    }
+    
+    const data = fs.readFileSync(PROCESSED_MENTIONS_FILE, 'utf8');
+    const state = JSON.parse(data);
+    
+    const processedMentions = new Set(state.processedMentions || []);
+    const sinceId = state.lastSinceId;
+    const processedDetails = state.processedDetails || {};
+    
+    console.log(`📂 Loaded state: ${processedMentions.size} processed mentions, since_id: ${sinceId || 'none'}`);
+    console.log(`📅 Last updated: ${state.lastUpdated || 'unknown'}`);
+    
+    return { processedMentions, sinceId, processedDetails };
+  } catch (err) {
+    console.error('❌ Failed to load processed state:', err.message);
+    console.log('📂 Starting fresh due to load error');
+    return { processedMentions: new Set(), sinceId: undefined, processedDetails: {} };
+  }
+}
 
 // ---------- wallet ----------
 function getJwkFromEnv() {
@@ -179,11 +228,31 @@ async function verifyTxIdExists(txid) {
 
 // ---------- core handler ----------
 async function handleMention(twitterClient, mention, includes) {
+  const authorId = mention.author_id;
+  const author = includes?.users?.find(u => u.id === authorId);
+  const username = author?.username || 'unknown';
+  
   try {
-    console.log(`🔍 Processing mention: ${mention.id} - "${mention.text}"`);
+    // Check format FIRST - if it's not "@NeedsArNS assign XXX", completely ignore
+    const undername = extractUndernameFromMention(mention.text || '');
+    if (!undername) {
+      // Silently ignore - don't log, don't process, don't track
+      return;
+    }
     
-    // Check access control first
+    console.log(`🔍 Processing mention: ${mention.id} - "${mention.text}"`);
+    console.log(`🏷️ Extracted undername: ${undername}`);
+    
+    // Check access control
     if (!isUserAllowed(mention, includes)) {
+      // Record denied access attempt
+      processedDetails[mention.id] = {
+        username: username,
+        success: false,
+        reason: 'access_denied',
+        timestamp: new Date().toISOString()
+      };
+      
       const denialMsg = [
         `👋 Thanks for your interest!`,
         `🚧 ArNS assignment is currently in private beta.`,
@@ -212,14 +281,6 @@ async function handleMention(twitterClient, mention, includes) {
     }
     console.log(`🔗 Extracted TXID: ${txId}`);
 
-    const undername = extractUndernameFromMention(mention.text || '');
-    if (!undername) {
-      console.log(`❌ No valid undername found in mention ${mention.id}`);
-      await reply(twitterClient, mention.id, `❌ Invalid undername format. Use: @NeedsArNS assign <name> (1-51 chars, a-z, 0-9, - or _)`);
-      return; // require 'assign <undername>'
-    }
-    console.log(`🏷️ Extracted undername: ${undername}`);
-
     // Optional: ensure the txid resolves
     console.log(`🔍 Verifying TXID exists: ${txId}`);
     const ok = await verifyTxIdExists(txId);
@@ -229,6 +290,32 @@ async function handleMention(twitterClient, mention, includes) {
       return;
     }
     console.log(`✅ TXID verified: ${txId}`);
+
+    // Check if undername already exists first
+    console.log(`🔍 Checking if undername already exists: ${undername}`);
+    try {
+      const existingRecords = await ant.getRecords();
+      if (existingRecords && existingRecords[undername]) {
+        console.log(`❌ Undername '${undername}' already exists, pointing to: ${existingRecords[undername].transactionId}`);
+        
+        // Record failed assignment (name taken)
+        processedDetails[mention.id] = {
+          username: username,
+          undername: undername,
+          txId: txId,
+          success: false,
+          reason: 'undername_taken',
+          timestamp: new Date().toISOString()
+        };
+        
+        await reply(twitterClient, mention.id, `❌ Undername '${undername}' is already taken. Try a different name.`);
+        return;
+      }
+      console.log(`✅ Undername '${undername}' is available`);
+    } catch (checkError) {
+      console.log(`⚠️ Could not check existing records, proceeding with creation: ${checkError.message}`);
+      // If we can't check, proceed with creation and let the original error handling catch duplicates
+    }
 
     // Write undername -> txid on your ArNS name
     console.log(`📝 Creating ArNS record: ${undername} → ${txId}`);
@@ -242,9 +329,31 @@ async function handleMention(twitterClient, mention, includes) {
       });
       onchainId = result.id;
       console.log(`✅ ArNS record created: ${onchainId}`);
+      
+      // Record successful assignment
+      processedDetails[mention.id] = {
+        username: username,
+        undername: undername,
+        txId: txId,
+        onchainId: onchainId,
+        success: true,
+        timestamp: new Date().toISOString()
+      };
+      
     } catch (recordError) {
       if (recordError.message?.includes('already exists') || recordError.message?.includes('taken')) {
         console.log(`❌ Undername '${undername}' is already taken`);
+        
+        // Record failed assignment (name taken)
+        processedDetails[mention.id] = {
+          username: username,
+          undername: undername,
+          txId: txId,
+          success: false,
+          reason: 'undername_taken',
+          timestamp: new Date().toISOString()
+        };
+        
         await reply(twitterClient, mention.id, `❌ Undername '${undername}' is already taken. Try a different name.`);
         return;
       }
@@ -263,10 +372,20 @@ async function handleMention(twitterClient, mention, includes) {
     // Wait 1 minute before replying to make it feel more natural
     console.log('⏳ Waiting 1 minute before replying...');
     await new Promise(resolve => setTimeout(resolve, 60000));
-    
+
     await reply(twitterClient, mention.id, msg);
   } catch (err) {
     console.error('handleMention error:', err?.message || err);
+    
+    // Record failed assignment (error)
+    processedDetails[mention.id] = {
+      username: username,
+      success: false,
+      reason: 'error',
+      error: err?.message || 'unknown error',
+      timestamp: new Date().toISOString()
+    };
+    
     await reply(twitterClient, mention.id, `❌ Failed: ${err?.message ?? 'unknown error'}`);
   }
 }
@@ -274,7 +393,9 @@ async function handleMention(twitterClient, mention, includes) {
 // ---------- request queuing ----------
 let isProcessing = false;
 let isPolling = false;
-const processedMentions = new Set();
+
+// Load persistent state on startup
+const { processedMentions, sinceId: initialSinceId, processedDetails } = loadProcessedState();
 
 async function processMentionQueue(twitterClient, mention, includes) {
   // Wait if another mention is being processed
@@ -294,9 +415,9 @@ async function processMentionQueue(twitterClient, mention, includes) {
 // ---------- polling loop ----------
 async function pollMentionsForever() {
 
-  let sinceId;
+  let sinceId = initialSinceId; // Load from persistent storage
   let backoffMs = POLL_INTERVAL_MS;
-  let isFirstPoll = true;
+  let isFirstPoll = !sinceId; // Only first poll if we don't have a saved since_id
   // Countdown timer removed for now - was causing scheduling issues
 
   async function pollOnce() {
@@ -338,19 +459,45 @@ async function pollMentionsForever() {
       const batch = res._realData?.data ?? [];
       if (batch.length) {
         console.log(`📨 Found ${batch.length} new mentions`);
-        // newest first from API; remember the newest
-        sinceId = batch[0].id;
-        isFirstPoll = false;
         
-        // Queue mentions for processing (oldest -> newest)
-        const newMentions = batch.reverse().filter(m => !processedMentions.has(m.id));
-        if (newMentions.length > 0) {
-          console.log(`📋 Queuing ${newMentions.length} new mentions for processing`);
-          const includes = res._realData?.includes || {};
-          for (const m of newMentions) {
-            processedMentions.add(m.id);
-            await processMentionQueue(twitter, m, includes);
+        // Apply time-based filtering first
+        const cutoffTime = Date.now() - (MENTION_MAX_AGE_HOURS * 60 * 60 * 1000);
+        const recentMentions = batch.filter(m => {
+          const mentionTime = new Date(m.created_at).getTime();
+          const isRecent = mentionTime > cutoffTime;
+          if (!isRecent) {
+            const ageHours = ((Date.now() - mentionTime) / (60 * 60 * 1000)).toFixed(1);
+            console.log(`⏰ Skipping old mention ${m.id} (${ageHours}h old): "${m.text}"`);
           }
+          return isRecent;
+        });
+        
+        if (recentMentions.length !== batch.length) {
+          console.log(`⏰ Filtered out ${batch.length - recentMentions.length} old mentions (older than ${MENTION_MAX_AGE_HOURS}h)`);
+        }
+        
+        if (recentMentions.length > 0) {
+        // newest first from API; remember the newest
+          sinceId = recentMentions[0].id;
+          isFirstPoll = false;
+          
+          // Save updated since_id immediately
+          saveProcessedState(processedMentions, sinceId, processedDetails);
+          
+          // Queue mentions for processing (oldest -> newest)
+          const newMentions = recentMentions.reverse().filter(m => !processedMentions.has(m.id));
+          if (newMentions.length > 0) {
+            console.log(`📋 Queuing ${newMentions.length} new mentions for processing`);
+            const includes = res._realData?.includes || {};
+            for (const m of newMentions) {
+              processedMentions.add(m.id);
+              await processMentionQueue(twitter, m, includes);
+            // Save state after each processed mention
+            saveProcessedState(processedMentions, sinceId, processedDetails);
+            }
+          }
+        } else {
+          console.log('⏰ No recent mentions to process after time filtering');
         }
       } else {
         console.log('🔍 No new mentions found');
@@ -365,7 +512,7 @@ async function pollMentionsForever() {
         console.log(`📊 Rate limit details: ${e.message || 'No details'}`);
         backoffMs = RATE_LIMIT_BACKOFF_MS; // Wait full 15 minutes
       } else {
-        console.error('poll error:', e?.message || e);
+      console.error('poll error:', e?.message || e);
         console.error('poll error code:', e?.code);
         console.error('poll error details:', e);
       }

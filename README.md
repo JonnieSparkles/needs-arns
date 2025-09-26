@@ -53,6 +53,9 @@ PORT=3000
 
 # Access Control (optional - leave empty for open access)
 ALLOWED_USERS=username1,username2,username3  # Comma-separated list (without @)
+
+# Time-based filtering (optional)
+MENTION_MAX_AGE_HOURS=24  # Only process mentions from last 24 hours
 ```
 
 ### Install & Run
@@ -102,10 +105,14 @@ The bot has been tested and confirmed working with:
 - 🕐 **Polling**: Every 16 minutes (Twitter free plan optimized)
 - ⚡ **API Efficiency**: Single optimized call per cycle using expansions
 - 🔒 **Access Control**: Optional whitelist system for authorized users
+- ⏰ **Time Filtering**: Configurable time window for processing mentions (default: 24h)
+- 💾 **Persistent Storage**: Auto-saves processed mentions to `processed_mentions.json`
 - ⏱️ **Natural Timing**: 1-minute delay before success replies
 - 🛡️ **Error Handling**: Immediate error responses, graceful rate limit handling
-- 🚫 **Deduplication**: Each mention processed exactly once
-- 📊 **Monitoring**: Comprehensive logging and debug information
+- 🚫 **Deduplication**: Each mention processed exactly once across restarts
+- 📊 **Detailed Tracking**: Logs username, undername, TXID, and success status for every mention
+- 🔍 **Smart Validation**: Only processes mentions starting with @NeedsArNS
+- 📈 **Audit Trail**: Complete history of all processed mentions with timestamps
 
 ## Technical Stack
 
@@ -131,6 +138,8 @@ The bot has been tested and confirmed working with:
 
 ### User Experience
 - ✅ **Access Control** - Optional whitelist system for controlling who can assign names
+- ✅ **Time-based Filtering** - Configurable time window for processing mentions (default: 24h)
+- ✅ **Persistent Storage** - Remembers processed mentions across restarts via JSON file
 - ✅ **Natural Response Timing** - 1-minute delay before replying to feel more human
 - ✅ **Error Handling** - Graceful error handling with user feedback
 - ✅ **Taken Undername Detection** - Handles already-taken undernames gracefully
@@ -157,11 +166,46 @@ The bot has been tested and confirmed working with:
 ### Reliability & Performance
 - ⚡ **Optimized API Usage**: Single call per cycle with Twitter API expansions
 - 🔄 **Automatic Recovery**: Handles rate limits and network issues gracefully
+- 💾 **Persistent State**: Survives restarts, crashes, and deployments without reprocessing
+- ⏰ **Time-based Safety**: Configurable time window prevents processing very old mentions
 - 📊 **Real-time Monitoring**: Debug endpoints for live system status
 - 🎯 **Enterprise Ready**: Production-tested with comprehensive error handling
+- 📈 **Complete Audit Trail**: JSON file tracks every mention with full details
 
 ### User Experience
 - 🎉 **Celebratory Responses**: Fun, engaging replies with emojis
 - 📱 **Mobile Friendly**: Multi-line responses that display well on all devices
 - 🔗 **Multiple Formats**: Provides both `ar://` and `.ar.io` URLs for flexibility
 - 💬 **Professional Branding**: Consistent @ArNSdomains attribution
+
+## Enhanced Tracking & Persistence
+
+### Processed Mentions File
+The bot automatically creates and maintains `processed_mentions.json` with detailed tracking:
+
+```json
+{
+  "processedMentions": ["1971422102348759442"],
+  "processedDetails": {
+    "1971422102348759442": {
+      "username": "jonniesparkles",
+      "undername": "cool-nft", 
+      "txId": "4136-HHYif93aC7tlpMRmEpWEAKPcbUZ_O-UbmSKMqw",
+      "onchainId": "992D5VGmbBTKddwtC6yOtLJSdKnF52B3gPmf2B6rGC4",
+      "success": true,
+      "timestamp": "2025-09-26T04:15:30.123Z"
+    }
+  },
+  "lastSinceId": "1971422102348759442",
+  "lastUpdated": "2025-09-26T04:15:30.123Z",
+  "version": "1.1"
+}
+```
+
+### Benefits
+- 📊 **Complete Audit Trail**: Every mention tracked with full context
+- 🔄 **Restart Safe**: No reprocessing after bot restarts or deployments  
+- 🎯 **Easy Debugging**: Track down issues by mention ID or username
+- 📈 **Usage Analytics**: See who's using the bot and what names they're claiming
+- 🛡️ **Security Monitoring**: Track access denial attempts and errors
+- ⏰ **Time Filtering**: Automatically ignores mentions older than configured threshold

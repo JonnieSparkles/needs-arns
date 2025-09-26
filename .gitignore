@@ -9,3 +9,6 @@ npm-debug.log
 
 # misc
 notes.txt
+
+# persistent storage
+processed_mentions.json
