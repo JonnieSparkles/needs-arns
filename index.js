@@ -27,7 +27,9 @@ const {
 const ANT_PROCESS_ID = requireEnv('ANT_PROCESS_ID');
 const WALLET_ADDRESS = process.env.WALLET_ADDRESS || 'Unknown';
 
+console.log('🔍 DEBUG: process.env.DEFAULT_TTL_SECONDS =', process.env.DEFAULT_TTL_SECONDS);
 const DEFAULT_TTL_SECONDS = parseInt(process.env.DEFAULT_TTL_SECONDS || '60', 10); // 60 seconds minimum
+console.log('🔍 DEBUG: DEFAULT_TTL_SECONDS =', DEFAULT_TTL_SECONDS);
 const POLL_INTERVAL_MS = parseInt(process.env.POLL_INTERVAL_MS || '960000', 10); // 16 minutes for free plan (with buffer)
 const RATE_LIMIT_BACKOFF_MS = 960000; // 16 minutes for Twitter free plan (with buffer)
 
@@ -63,14 +65,12 @@ const ant = ANT.init({
 const ARWEAVE_TXID_RE = /https?:\/\/(?:www\.)?(?:[a-z0-9-]+\.)?arweave\.net\/([A-Za-z0-9_-]{43})(?:\b|\/|\?|#)/;
 const ASSIGN_CMD_RE = /\bassign\s+([a-z0-9_-]{1,63})\b/i;
 
-async function fetchParentTweet(twitterClient, mention) {
+function fetchParentTweet(includes, mention) {
   const replied = mention?.referenced_tweets?.find(t => t.type === 'replied_to');
   if (!replied) return null;
-  // include entities so we can get expanded URLs (X often shows t.co)
-  const parent = await twitterClient.v2.singleTweet(replied.id, {
-    'tweet.fields': ['text', 'entities']
-  });
-  return parent?.data || null;
+  // Find the parent tweet in the includes data (no API call needed!)
+  const parent = includes?.tweets?.find(t => t.id === replied.id);
+  return parent || null;
 }
 
 function extractTxIdFromTweetData(tweetData) {
@@ -143,12 +143,12 @@ async function verifyTxIdExists(txid) {
 }
 
 // ---------- core handler ----------
-async function handleMention(twitterClient, mention) {
+async function handleMention(twitterClient, mention, includes) {
   try {
     console.log(`🔍 Processing mention: ${mention.id} - "${mention.text}"`);
     
     // We only act when the mention is in reply to a tweet (the parent should have the link)
-    const parent = await fetchParentTweet(twitterClient, mention);
+    const parent = fetchParentTweet(includes, mention);
     if (!parent) {
       console.log(`❌ No parent tweet found for mention ${mention.id}`);
       return;
@@ -182,13 +182,15 @@ async function handleMention(twitterClient, mention) {
 
     // Write undername -> txid on your ArNS name
     console.log(`📝 Creating ArNS record: ${undername} → ${txId}`);
+    let onchainId;
     try {
       console.log(`🔍 Using TTL: ${DEFAULT_TTL_SECONDS} seconds`);
-      const { id: onchainId } = await ant.setUndernameRecord({
+      const result = await ant.setUndernameRecord({
         undername: undername,
         transactionId: txId,
         ttlSeconds: DEFAULT_TTL_SECONDS
       });
+      onchainId = result.id;
       console.log(`✅ ArNS record created: ${onchainId}`);
     } catch (recordError) {
       if (recordError.message?.includes('already exists') || recordError.message?.includes('taken')) {
@@ -223,7 +225,7 @@ let isProcessing = false;
 let isPolling = false;
 const processedMentions = new Set();
 
-async function processMentionQueue(twitterClient, mention) {
+async function processMentionQueue(twitterClient, mention, includes) {
   // Wait if another mention is being processed
   while (isProcessing) {
     console.log('⏳ Waiting for previous mention to finish processing...');
@@ -232,7 +234,7 @@ async function processMentionQueue(twitterClient, mention) {
   
   isProcessing = true;
   try {
-    await handleMention(twitterClient, mention);
+    await handleMention(twitterClient, mention, includes);
   } finally {
     isProcessing = false;
   }
@@ -240,8 +242,6 @@ async function processMentionQueue(twitterClient, mention) {
 
 // ---------- polling loop ----------
 async function pollMentionsForever() {
-  const me = await twitter.v2.me();
-  console.log('Bot user id:', me.data.id, 'screen name:', me.data.username);
 
   let sinceId;
   let backoffMs = POLL_INTERVAL_MS;
@@ -260,9 +260,10 @@ async function pollMentionsForever() {
       // On first poll, don't use since_id to catch all recent mentions
       const actualSinceId = isFirstPoll ? undefined : sinceId;
       console.log(`🔍 Fetching mentions since_id: ${actualSinceId || 'none'}${isFirstPoll ? ' (first poll - getting all recent)' : ''}`);
-      const res = await twitter.v2.userMentionTimeline(me.data.id, {
+      const res = await twitter.v2.userMentionTimeline(BOT_USER_ID, {
         since_id: actualSinceId,
-        'tweet.fields': ['referenced_tweets', 'created_at', 'entities'],
+        'tweet.fields': ['referenced_tweets', 'created_at', 'entities', 'text'],
+        expansions: ['referenced_tweets.id'],
         max_results: 100
       });
       console.log(`📊 API Response: ${res._realData?.data?.length || 0} mentions found`);
@@ -293,9 +294,10 @@ async function pollMentionsForever() {
         const newMentions = batch.reverse().filter(m => !processedMentions.has(m.id));
         if (newMentions.length > 0) {
           console.log(`📋 Queuing ${newMentions.length} new mentions for processing`);
+          const includes = res._realData?.includes || {};
           for (const m of newMentions) {
             processedMentions.add(m.id);
-            await processMentionQueue(twitter, m);
+            await processMentionQueue(twitter, m, includes);
           }
         }
       } else {
@@ -327,7 +329,11 @@ async function pollMentionsForever() {
   
   // Wait 1 minute before first poll to give time for setup
   console.log('⏳ Waiting 1 minute before first poll...');
-  setTimeout(() => {
+  // Bot user ID (known from previous runs)
+  const BOT_USER_ID = '1971034918240256000';
+  console.log('Bot user id:', BOT_USER_ID, 'screen name: NeedsArNS');
+  
+  setTimeout(async () => {
     console.log('🚀 Starting first poll...');
     pollOnce();
   }, 60000);
