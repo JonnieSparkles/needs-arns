@@ -33,6 +33,10 @@ console.log('🔍 DEBUG: DEFAULT_TTL_SECONDS =', DEFAULT_TTL_SECONDS);
 const POLL_INTERVAL_MS = parseInt(process.env.POLL_INTERVAL_MS || '960000', 10); // 16 minutes for free plan (with buffer)
 const RATE_LIMIT_BACKOFF_MS = 960000; // 16 minutes for Twitter free plan (with buffer)
 
+// Access control - comma-separated list of allowed usernames (without @)
+const ALLOWED_USERS = process.env.ALLOWED_USERS ? process.env.ALLOWED_USERS.split(',').map(u => u.trim().toLowerCase()) : [];
+console.log('🔐 Access control enabled for users:', ALLOWED_USERS.length > 0 ? ALLOWED_USERS : 'ALL USERS (no restrictions)');
+
 // ---------- wallet ----------
 function getJwkFromEnv() {
   if (process.env.ARWEAVE_JWK_JSON) {
@@ -80,6 +84,28 @@ function extractTxIdFromTweetData(tweetData) {
   const haystack = `${text}\n${expanded}`;
   const m = haystack.match(ARWEAVE_TXID_RE);
   return m ? m[1] : null;
+}
+
+function isUserAllowed(mention, includes) {
+  // If no access control is configured, allow all users
+  if (ALLOWED_USERS.length === 0) {
+    return true;
+  }
+  
+  // Find the author info from the includes.users data
+  const authorId = mention.author_id;
+  const author = includes?.users?.find(u => u.id === authorId);
+  
+  if (!author || !author.username) {
+    console.log(`⚠️ Could not determine username for mention ${mention.id}`);
+    return false; // Deny if we can't identify the user
+  }
+  
+  const username = author.username.toLowerCase();
+  const isAllowed = ALLOWED_USERS.includes(username);
+  
+  console.log(`🔐 Access check: @${username} ${isAllowed ? '✅ ALLOWED' : '❌ DENIED'}`);
+  return isAllowed;
 }
 
 function extractUndernameFromMention(mentionText) {
@@ -147,6 +173,21 @@ async function handleMention(twitterClient, mention, includes) {
   try {
     console.log(`🔍 Processing mention: ${mention.id} - "${mention.text}"`);
     
+    // Check access control first
+    if (!isUserAllowed(mention, includes)) {
+      const denialMsg = [
+        `👋 Thanks for your interest!`,
+        `🚧 ArNS assignment is currently in private beta.`,
+        ``,
+        `Stay tuned for updates! 🔔`,
+        ``,
+        `Powered by @ArNSdomains`
+      ].join('\n');
+      
+      await reply(twitterClient, mention.id, denialMsg);
+      return;
+    }
+    
     // We only act when the mention is in reply to a tweet (the parent should have the link)
     const parent = fetchParentTweet(includes, mention);
     if (!parent) {
@@ -201,13 +242,14 @@ async function handleMention(twitterClient, mention, includes) {
       throw recordError; // Re-throw if it's a different error
     }
 
-    const pretty = `${undername}_${OWNER_ARNS_NAME}.ar-io.dev`;
     const msg = [
-      `✅ Undername assigned!`,
-      `${undername}_${OWNER_ARNS_NAME}.ar-io.dev`,
+      `🎉 Undername assigned!`,
+      `ar://${undername}_${OWNER_ARNS_NAME}`,
+      `${undername}_${OWNER_ARNS_NAME}.ar.io`,
       `→ ${txId}`,
-      `(tx: ${onchainId})`
-    ].join(' ');
+      ``,
+      `Powered by @ArNSdomains`
+    ].join('\n');
 
     // Wait 1 minute before replying to make it feel more natural
     console.log('⏳ Waiting 1 minute before replying...');
@@ -262,8 +304,9 @@ async function pollMentionsForever() {
       console.log(`🔍 Fetching mentions since_id: ${actualSinceId || 'none'}${isFirstPoll ? ' (first poll - getting all recent)' : ''}`);
       const res = await twitter.v2.userMentionTimeline(BOT_USER_ID, {
         since_id: actualSinceId,
-        'tweet.fields': ['referenced_tweets', 'created_at', 'entities', 'text'],
-        expansions: ['referenced_tweets.id'],
+        'tweet.fields': ['referenced_tweets', 'created_at', 'entities', 'text', 'author_id'],
+        expansions: ['referenced_tweets.id', 'author_id'],
+        'user.fields': ['username'],
         max_results: 100
       });
       console.log(`📊 API Response: ${res._realData?.data?.length || 0} mentions found`);
