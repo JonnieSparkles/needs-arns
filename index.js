@@ -111,6 +111,15 @@ function isUserAllowed(mention, includes) {
 function extractUndernameFromMention(mentionText) {
   // Replace line breaks with spaces to handle multi-line mentions
   const normalizedText = mentionText.replace(/\s+/g, ' ').trim();
+  
+  // Check if this is a valid command format: starts with @NeedsArNS (case insensitive)
+  // Allow other mentions after, but @NeedsArNS must be the primary command
+  const startsWithBot = /^\s*@NeedsArNS\b/i.test(normalizedText);
+  if (!startsWithBot) {
+    console.log(`🚫 Not a direct command: "${normalizedText}"`);
+    return null; // Not a direct command to our bot
+  }
+  
   const m = normalizedText.match(ASSIGN_CMD_RE);
   if (!m) return null;
   
