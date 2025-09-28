@@ -20,6 +20,8 @@ Built with enterprise-grade optimization, access control, monitoring, and **Turb
 3. 🤖 **Bot downloads** media → **uploads to Arweave via Turbo** → **creates mapping**
 4. 🎉 **Bot replies** with `📸 Media uploaded & assigned!` confirmation
 
+**Note:** For posts with multiple images/videos, the bot processes only the **first media attachment** to keep the experience simple and predictable.
+
 ### Example Flows
 
 **Existing Link:**
