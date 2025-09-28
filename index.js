@@ -438,9 +438,20 @@ function isValidUndername(undername) {
 
 async function reply(twitterClient, inReplyTo, body) {
   try {
-    await twitterClient.v2.reply(body, inReplyTo);
+    const replyResult = await twitterClient.v2.reply(body, inReplyTo);
+    return replyResult.data?.id; // Return the reply tweet ID
   } catch (e) {
     console.error('reply error:', e?.message || e);
+    return null;
+  }
+}
+
+async function retweet(twitterClient, tweetId) {
+  try {
+    await twitterClient.v2.retweet(BOT_USER_ID, tweetId);
+    console.log(`🔄 Retweeted: ${tweetId}`);
+  } catch (e) {
+    console.error('retweet error:', e?.message || e);
   }
 }
 
@@ -688,12 +699,20 @@ async function handleMention(twitterClient, mention, includes) {
         // If still too long, use minimal message
         const minimalMsg = `🎉 ${undername}_${OWNER_ARNS_NAME}.ar.io → ${txId}`;
         console.log(`⚠️ Using minimal message (${minimalMsg.length} chars)`);
-        await reply(twitterClient, mention.id, minimalMsg);
+        const replyTweetId = await reply(twitterClient, mention.id, minimalMsg);
+        if (replyTweetId) {
+          console.log('🔄 Retweeting success message...');
+          await retweet(twitterClient, replyTweetId);
+        }
         return;
       }
       
       console.log(`✅ Using truncated message (${truncatedMsg.length} chars)`);
-      await reply(twitterClient, mention.id, truncatedMsg);
+      const replyTweetId = await reply(twitterClient, mention.id, truncatedMsg);
+      if (replyTweetId) {
+        console.log('🔄 Retweeting success message...');
+        await retweet(twitterClient, replyTweetId);
+      }
       return;
     }
 
@@ -701,7 +720,13 @@ async function handleMention(twitterClient, mention, includes) {
     console.log('⏳ Waiting 1 minute before replying...');
     await new Promise(resolve => setTimeout(resolve, 60000));
 
-    await reply(twitterClient, mention.id, msg);
+    const replyTweetId = await reply(twitterClient, mention.id, msg);
+    
+    // Retweet the success message to promote the archived content
+    if (replyTweetId) {
+      console.log('🔄 Retweeting success message...');
+      await retweet(twitterClient, replyTweetId);
+    }
   } catch (err) {
     console.error('handleMention error:', err?.message || err);
     

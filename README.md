@@ -15,7 +15,7 @@ Built with enterprise-grade optimization, access control, monitoring, and **Turb
 4. 🎉 **Bot replies** with `🔗 Link assigned!` confirmation
 
 ### Mode 2: Media Upload (Fallback)
-1. 📸 **User posts** image or video (no Arweave link)
+1. 📸 **User posts** image, video, or animated GIF (no Arweave link)
 2. 💬 **User replies** with `@yourbot assign <subdomain>` (if whitelisted)  
 3. 🤖 **Bot downloads** media → **uploads to Arweave via Turbo** → **creates mapping**
 4. 🎉 **Bot replies** with `📸 Media uploaded & assigned!` confirmation
