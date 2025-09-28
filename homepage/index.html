@@ -446,10 +446,22 @@
 
     <script>
         // Configuration
+        const fullHostname = window.location.hostname;
+        const arnsName = 'needsarns';
+        
+        // Extract the gateway domain (remove the ArNS subdomain if present)
+        // Handle cases like: needsarns.vilenarios.com, needsarns.gateway.co.uk, etc.
+        let gatewayHost = fullHostname;
+        if (fullHostname.startsWith(`${arnsName}.`)) {
+            // Remove the ArNS subdomain: needsarns.vilenarios.com -> vilenarios.com
+            gatewayHost = fullHostname.substring(arnsName.length + 1);
+        }
+        
         const BOT_CONFIG = {
-            arnsName: 'needsarns', // Your bot's ArNS name
-            gatewayUrl: window.location.protocol + '//' + window.location.hostname + (window.location.port ? ':' + window.location.port : ''),
-            archiveUrl: 'https://archive_needsarns.ar.io' // Archive ArNS URL
+            arnsName: arnsName, // Your bot's ArNS name
+            gatewayUrl: window.location.protocol + '//' + fullHostname + (window.location.port ? ':' + window.location.port : ''),
+            gatewayHost: gatewayHost,
+            archiveUrl: `https://archive_${arnsName}.${gatewayHost}` // Archive ArNS URL using current gateway
         };
         
         let allRecords = [];
@@ -484,7 +496,7 @@
                 const response = await fetch(BOT_CONFIG.archiveUrl);
                 
                 if (!response.ok) {
-                    throw new Error(`Archive fetch failed: ${response.status}`);
+                    throw new Error(`Archive fetch failed: ${response.status} ${response.statusText}`);
                 }
                 
                 const archiveData = await response.json();
@@ -493,6 +505,25 @@
                 return archiveData;
             } catch (error) {
                 console.error('Error fetching archive:', error);
+                
+                // Try fallback to ar.io if current gateway fails
+                if (BOT_CONFIG.gatewayHost !== 'ar.io') {
+                    console.log('Trying fallback to ar.io...');
+                    try {
+                        const fallbackUrl = `https://archive_needsarns.ar.io`;
+                        console.log('Fetching archive from fallback:', fallbackUrl);
+                        const fallbackResponse = await fetch(fallbackUrl);
+                        
+                        if (fallbackResponse.ok) {
+                            const archiveData = await fallbackResponse.json();
+                            console.log('Archive data loaded from fallback:', archiveData);
+                            return archiveData;
+                        }
+                    } catch (fallbackError) {
+                        console.error('Fallback also failed:', fallbackError);
+                    }
+                }
+                
                 throw new Error(`Failed to load archive: ${error.message}`);
             }
         }
@@ -513,8 +544,8 @@
             const recordsToShow = sortedRecords.slice(0, displayedCount);
             
             const html = recordsToShow.map(record => {
-                // Construct ArNS undername URL - should be undername_needsarns.ar.io
-                const arnsUndernameUrl = `https://${record.undername}_${BOT_CONFIG.arnsName}.ar.io`;
+                // Construct ArNS undername URL using current gateway
+                const arnsUndernameUrl = `https://${record.undername}_${BOT_CONFIG.arnsName}.${BOT_CONFIG.gatewayHost}`;
                 
                 return `
                 <div class="gallery-card" onclick="viewContent('${record.undername}')">
@@ -561,7 +592,7 @@
         
         // View content in new tab
         function viewContent(undername) {
-            const arnsUndernameUrl = `https://${undername}_${BOT_CONFIG.arnsName}.ar.io`;
+            const arnsUndernameUrl = `https://${undername}_${BOT_CONFIG.arnsName}.${BOT_CONFIG.gatewayHost}`;
             window.open(arnsUndernameUrl, '_blank');
         }
         
