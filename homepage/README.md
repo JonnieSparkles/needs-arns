@@ -4,6 +4,7 @@ A clean, modern homepage for the NeedsArNS Twitter bot, designed to be hosted on
 
 ## Features
 
+- **Live Archive Gallery**: Displays all content archived by the bot with image previews
 - **Modern Design**: Clean, responsive layout with gradient backgrounds
 - **Credit System Integration**: Links to Turbo credit sharing functionality
 - **Bot Information**: Commands, features, and technical details
@@ -12,8 +13,10 @@ A clean, modern homepage for the NeedsArNS Twitter bot, designed to be hosted on
 
 ## Files
 
-- `index.html` - Main homepage
+- `index.html` - Main homepage with live archive gallery
 - `deploy.js` - Deployment script for Arweave
+- `gallery.html` - Standalone gallery page (legacy)
+- `directory.html` - ArNS viewer example (legacy)
 - `README.md` - This file
 
 ## Deployment
@@ -48,6 +51,16 @@ The homepage includes several customizable elements:
 - **Status**: Currently shows "Private Beta" - update when going public
 - **Features**: Add/remove technical features as needed
 - **Colors**: Modify CSS gradient and color scheme
+
+## Archive System
+
+The homepage automatically displays all content archived by the bot:
+
+- **Live Gallery**: Fetches data from `https://archive_needsarns.ar.io`
+- **Rich Metadata**: Shows username, media type, timestamps, and ArNS URLs
+- **Image Previews**: Displays thumbnails for media content
+- **Direct Links**: Click to view content on Arweave or ArNS domains
+- **Auto-Updates**: Gallery updates automatically as bot processes new content
 
 ## Integration with Bot
 

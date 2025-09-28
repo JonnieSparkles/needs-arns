@@ -4,6 +4,8 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>NeedsArNS Bot - Arweave Name System</title>
+    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Cdefs%3E%3ClinearGradient id='grad' x1='0%25' y1='0%25' x2='100%25' y2='100%25'%3E%3Cstop offset='0%25' style='stop-color:%23667eea;stop-opacity:1' /%3E%3Cstop offset='100%25' style='stop-color:%23764ba2;stop-opacity:1' /%3E%3C/linearGradient%3E%3C/defs%3E%3Ccircle cx='50' cy='50' r='45' fill='url(%23grad)'/%3E%3Ctext x='50' y='60' font-family='Arial, sans-serif' font-size='40' font-weight='bold' text-anchor='middle' fill='white'%3E🎨%3C/text%3E%3C/svg%3E">
+    <link rel="stylesheet" href="https://unpkg.com/lucide-static@latest/font/lucide.css" />
     <style>
         * {
             margin: 0;
@@ -15,130 +17,285 @@
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
             line-height: 1.6;
             color: #333;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            background: linear-gradient(135deg, #f8fafc 0%, #e2e8f0 50%, #cbd5e1 100%);
             min-height: 100vh;
         }
         
         .container {
-            max-width: 800px;
+            max-width: 1200px;
             margin: 0 auto;
             padding: 2rem;
         }
         
         .card {
             background: white;
-            border-radius: 16px;
-            padding: 3rem;
-            box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+            border-radius: 0;
+            padding: 2.5rem;
+            box-shadow: 0 0 0 1px rgba(0,0,0,0.08), 0 4px 24px rgba(0,0,0,0.12);
             margin: 2rem 0;
+            border: 1px solid rgba(0,0,0,0.06);
         }
         
         h1 {
-            font-size: 3rem;
-            font-weight: 700;
-            background: linear-gradient(135deg, #667eea, #764ba2);
+            font-size: 3.5rem;
+            font-weight: 800;
+            background: linear-gradient(135deg, #06b6d4, #3b82f6, #8b5cf6);
             -webkit-background-clip: text;
+            background-clip: text;
             -webkit-text-fill-color: transparent;
             text-align: center;
-            margin-bottom: 1rem;
+            margin-bottom: 1.5rem;
+            letter-spacing: -0.02em;
         }
         
         .subtitle {
             text-align: center;
-            font-size: 1.2rem;
+            font-size: 1.3rem;
             color: #666;
-            margin-bottom: 3rem;
+            margin-bottom: 2rem;
+            font-weight: 400;
+            line-height: 1.5;
         }
         
         .bot-handle {
-            background: #1da1f2;
+            background: #06b6d4;
             color: white;
-            padding: 0.5rem 1rem;
-            border-radius: 20px;
+            padding: 0.75rem 1.5rem;
+            border-radius: 0;
             font-weight: 600;
             text-decoration: none;
             display: inline-block;
             margin: 0.5rem;
+            box-shadow: 0 2px 8px rgba(6, 182, 212, 0.3);
+            transition: all 0.2s ease;
+            border: 2px solid #06b6d4;
         }
         
         .bot-handle:hover {
-            background: #0d8bd9;
+            background: #0891b2;
             transform: translateY(-2px);
-            transition: all 0.3s ease;
+            box-shadow: 0 4px 16px rgba(6, 182, 212, 0.4);
+            border-color: #0891b2;
         }
         
         .section {
-            margin: 2rem 0;
+            margin: 1.5rem 0;
         }
         
         .section h2 {
             color: #333;
             margin-bottom: 1rem;
-            font-size: 1.5rem;
+            font-size: 1.6rem;
+            font-weight: 700;
+            letter-spacing: -0.01em;
         }
         
         .command {
             background: #f8f9fa;
-            border: 1px solid #e9ecef;
-            border-radius: 8px;
+            border: 2px solid #e9ecef;
+            border-radius: 0;
             padding: 1rem;
             margin: 0.5rem 0;
-            font-family: 'Monaco', 'Menlo', monospace;
-            font-size: 0.9rem;
+            font-family: 'Monaco', 'Menlo', 'SF Mono', monospace;
+            font-size: 0.95rem;
+            color: #333;
+            box-shadow: none;
+            transition: all 0.2s ease;
+        }
+        
+        .command:hover {
+            background: #ffffff;
+            border-color: #06b6d4;
+            transform: translateY(-1px);
         }
         
         .feature {
             display: flex;
             align-items: center;
-            margin: 1rem 0;
+            margin: 0.75rem 0;
+            padding: 0.75rem;
+            background: #ffffff;
+            border-radius: 0;
+            border-left: 4px solid #06b6d4;
+            border: 1px solid #e9ecef;
+            transition: all 0.2s ease;
+        }
+        
+        .feature:hover {
+            background: #f8f9fa;
+            border-color: #06b6d4;
+            transform: translateX(2px);
         }
         
         .feature-icon {
             font-size: 1.5rem;
             margin-right: 1rem;
             width: 2rem;
+            color: #06b6d4;
+        }
+        
+        .lucide-icon {
+            width: 24px;
+            height: 24px;
+            stroke: currentColor;
+            fill: none;
+            stroke-width: 2;
+            stroke-linecap: round;
+            stroke-linejoin: round;
         }
         
         .cta-button {
-            background: linear-gradient(135deg, #667eea, #764ba2);
+            background: #667eea;
             color: white;
-            padding: 1rem 2rem;
-            border: none;
-            border-radius: 8px;
+            padding: 1.25rem 2.5rem;
+            border: 2px solid #667eea;
+            border-radius: 0;
             font-size: 1.1rem;
             font-weight: 600;
             text-decoration: none;
             display: inline-block;
             text-align: center;
-            margin: 1rem 0;
-            transition: transform 0.3s ease;
+            margin: 1.25rem 0;
+            transition: all 0.2s ease;
+            box-shadow: none;
+            letter-spacing: 0.01em;
         }
         
         .cta-button:hover {
+            background: #764ba2;
+            border-color: #764ba2;
             transform: translateY(-2px);
+        }
+        
+        /* Gallery Styles */
+        .gallery-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+            gap: 2rem;
+            margin-top: 1.5rem;
+        }
+        
+        .gallery-card {
+            background: white;
+            border-radius: 0;
+            box-shadow: 0 0 0 1px rgba(0,0,0,0.08);
+            overflow: hidden;
+            transition: all 0.2s ease;
+            cursor: pointer;
+            border: 2px solid #e9ecef;
+        }
+        
+        .gallery-card:hover {
+            transform: translateY(-2px);
+            border-color: #667eea;
+            box-shadow: 0 4px 16px rgba(102, 126, 234, 0.15);
+        }
+        
+        .card-preview {
+            position: relative;
+            height: 220px;
+            background: #f8f9fa;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            overflow: hidden;
+        }
+        
+        .card-preview img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+        
+        .preview-icon {
+            font-size: 3rem;
+            color: #6c757d;
+        }
+        
+        .card-content {
+            padding: 1.25rem;
+        }
+        
+        .card-title {
+            font-weight: 700;
+            font-size: 1.15rem;
+            margin-bottom: 0.75rem;
+            color: #333;
+            letter-spacing: -0.01em;
+        }
+        
+        .card-meta {
+            font-size: 0.9rem;
+            color: #6c757d;
+            margin-bottom: 1rem;
+            line-height: 1.4;
+        }
+        
+        .card-links {
+            display: flex;
+            gap: 0.75rem;
+            flex-wrap: wrap;
+        }
+        
+        .card-link {
+            font-size: 0.85rem;
+            color: #667eea;
+            text-decoration: none;
+            padding: 0.4rem 0.8rem;
+            border: 2px solid #667eea;
+            border-radius: 0;
+            transition: all 0.2s ease;
+            font-weight: 500;
+        }
+        
+        .card-link:hover {
+            background: #667eea;
+            color: white;
+            transform: translateY(-1px);
+        }
+        
+        .loading, .error {
+            text-align: center;
+            padding: 3rem;
+            color: #6c757d;
+            font-style: italic;
+            font-size: 1.1rem;
+        }
+        
+        .error {
+            color: #dc3545;
         }
         
         .status {
             background: #d4edda;
-            border: 1px solid #c3e6cb;
+            border: 2px solid #c3e6cb;
             color: #155724;
             padding: 1rem;
-            border-radius: 8px;
+            border-radius: 0;
             margin: 1rem 0;
+            box-shadow: none;
         }
         
         .footer {
             text-align: center;
-            margin-top: 3rem;
+            margin-top: 2rem;
             color: #666;
+            font-size: 0.95rem;
+            line-height: 1.6;
         }
         
         .footer a {
             color: #667eea;
             text-decoration: none;
+            font-weight: 500;
+            transition: color 0.2s ease;
         }
         
-        @media (max-width: 600px) {
+        .footer a:hover {
+            color: #764ba2;
+        }
+        
+        @media (max-width: 768px) {
             .container {
                 padding: 1rem;
             }
@@ -148,7 +305,23 @@
             }
             
             h1 {
+                font-size: 2.5rem;
+            }
+            
+            .gallery-grid {
+                grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+                gap: 1.5rem;
+            }
+        }
+        
+        @media (max-width: 480px) {
+            h1 {
                 font-size: 2rem;
+            }
+            
+            .gallery-grid {
+                grid-template-columns: 1fr;
+                gap: 1rem;
             }
         }
     </style>
@@ -156,8 +329,8 @@
 <body>
     <div class="container">
         <div class="card">
-            <h1>🎉 NeedsArNS Bot</h1>
-            <p class="subtitle">Assign human-readable names to your Arweave content</p>
+            <h1><span class="icon-palette"></span> NeedsArNS Gallery</h1>
+            <p class="subtitle">Browse archived content from the NeedsArNS bot</p>
             
             <div style="text-align: center;">
                 <a href="https://twitter.com/NeedsArNS" class="bot-handle" target="_blank">
@@ -166,86 +339,76 @@
             </div>
             
             <div class="status">
-                <strong>🚧 Currently in Private Beta</strong><br>
-                Access limited to whitelisted users. Public launch coming soon!
+                <strong><span class="icon-shield"></span> Private Beta</strong><br>
+                Access limited to whitelisted users. Public launch coming soon.
             </div>
             
             <div class="section">
-                <h2>🚀 How It Works</h2>
-                <div class="feature">
-                    <span class="feature-icon">📸</span>
-                    <div>
-                        <strong>Media Upload Mode:</strong> Reply to any tweet with media using <code>@NeedsArNS assign &lt;name&gt;</code>
-                    </div>
-                </div>
-                <div class="feature">
-                    <span class="feature-icon">🔗</span>
-                    <div>
-                        <strong>Link Assignment Mode:</strong> Reply to tweets with existing Arweave links
-                    </div>
-                </div>
-                <div class="feature">
-                    <span class="feature-icon">⚡</span>
-                    <div>
-                        <strong>Powered by Turbo SDK:</strong> Fast, reliable uploads with programmable fiat payments
-                    </div>
+                <h2><span class="icon-grid-3x3"></span> Live Gallery</h2>
+                <p>All archived content. Click any item to view on Arweave.</p>
+                
+                <div id="galleryContainer">
+                    <div class="loading">Loading gallery...</div>
                 </div>
             </div>
             
             <div class="section">
-                <h2>💬 Commands</h2>
+                <h2><span class="icon-rocket"></span> How It Works</h2>
+                <div class="feature">
+                    <span class="feature-icon icon-camera"></span>
+                    <div>
+                        <strong>Media Upload:</strong> Reply to tweets with media using <code>@NeedsArNS assign &lt;name&gt;</code>
+                    </div>
+                </div>
+                <div class="feature">
+                    <span class="feature-icon icon-link"></span>
+                    <div>
+                        <strong>Link Assignment:</strong> Reply to tweets with existing Arweave links
+                    </div>
+                </div>
+                <div class="feature">
+                    <span class="feature-icon icon-zap"></span>
+                    <div>
+                        <strong>Turbo SDK:</strong> Fast uploads with programmable fiat payments
+                    </div>
+                </div>
+            </div>
+            
+            <div class="section">
+                <h2><span class="icon-message-square"></span> Commands</h2>
                 <div class="command">@NeedsArNS assign sparkles</div>
-                <p><em>Reply to a tweet with media or an Arweave link</em></p>
+                <p><em>Reply to a tweet with media or Arweave link</em></p>
                 
                 <div class="command">@NeedsArNS help</div>
-                <p><em>Get help and see all available commands</em></p>
+                <p><em>Display available commands</em></p>
             </div>
             
             <div class="section">
-                <h2>💰 Credit System (Coming Soon)</h2>
-                <p>Future features will include:</p>
+                <h2><span class="icon-credit-card"></span> Credit System (Coming Soon)</h2>
+                <p>Planned features:</p>
                 <ul style="margin-left: 2rem; margin-top: 1rem;">
-                    <li>Fund your account with fiat payments via Stripe</li>
-                    <li>Share credits with @NeedsArNS bot for uploads</li>
-                    <li>Pay only for media uploads (existing links are free)</li>
-                    <li>Track usage and balance in real-time</li>
+                    <li>Fiat payments via Stripe</li>
+                    <li>Credit sharing with bot</li>
+                    <li>Pay-per-upload pricing</li>
+                    <li>Real-time usage tracking</li>
                 </ul>
                 
                 <div style="text-align: center; margin: 2rem 0;">
                     <a href="https://turbo.ar.io/share" class="cta-button" target="_blank" style="opacity: 0.6; cursor: not-allowed;">
-                        💳 Share Credits with Bot (Coming Soon)
+                        <span class="icon-share"></span> Share Credits (Coming Soon)
                     </a>
                 </div>
                 
                 <div class="command" style="opacity: 0.6;">
                     Bot Address: [BOT_WALLET_ADDRESS]<br>
-                    <em>Credit sharing will be available soon</em>
+                    <em>Credit sharing available soon</em>
                 </div>
             </div>
             
-            <div class="section">
-                <h2>🔧 Technical Features</h2>
-                <div class="feature">
-                    <span class="feature-icon">🛡️</span>
-                    <div>Access control and user whitelisting</div>
-                </div>
-                <div class="feature">
-                    <span class="feature-icon">⏰</span>
-                    <div>Time-based mention filtering</div>
-                </div>
-                <div class="feature">
-                    <span class="feature-icon">💾</span>
-                    <div>Persistent storage across restarts</div>
-                </div>
-                <div class="feature">
-                    <span class="feature-icon">📊</span>
-                    <div>Detailed tracking and analytics</div>
-                </div>
-            </div>
             
-            <div style="text-align: center; margin: 2rem 0;">
+            <div style="text-align: center; margin: 1.5rem 0;">
                 <a href="https://turbo.ardrive.io" class="cta-button" target="_blank">
-                    🚀 Try Turbo SDK
+                    <span class="icon-rocket"></span> Try Turbo SDK
                 </a>
             </div>
             
@@ -257,5 +420,100 @@
             </div>
         </div>
     </div>
+
+    <script>
+        // Configuration
+        const BOT_CONFIG = {
+            arnsName: 'needsarns', // Your bot's ArNS name
+            gatewayUrl: window.location.protocol + '//' + window.location.hostname + (window.location.port ? ':' + window.location.port : ''),
+            archiveUrl: 'https://archive_needsarns.ar.io' // Archive ArNS URL
+        };
+        
+        let allRecords = [];
+        
+        // Load and display gallery
+        async function loadGallery() {
+            try {
+                document.getElementById('galleryContainer').innerHTML = '<div class="loading">Loading archive...</div>';
+                
+                // Fetch archive data
+                const archiveData = await fetchArchive();
+                allRecords = archiveData.records || [];
+                
+                renderGallery();
+                
+            } catch (error) {
+                console.error('Error loading gallery:', error);
+                document.getElementById('galleryContainer').innerHTML = 
+                    '<div class="error">Failed to load archive. Please try again later.</div>';
+            }
+        }
+        
+        // Fetch archive data from ArNS URL
+        async function fetchArchive() {
+            try {
+                console.log('Fetching archive from:', BOT_CONFIG.archiveUrl);
+                const response = await fetch(BOT_CONFIG.archiveUrl);
+                
+                if (!response.ok) {
+                    throw new Error(`Archive fetch failed: ${response.status}`);
+                }
+                
+                const archiveData = await response.json();
+                console.log('Archive data loaded:', archiveData);
+                
+                return archiveData;
+            } catch (error) {
+                console.error('Error fetching archive:', error);
+                throw new Error(`Failed to load archive: ${error.message}`);
+            }
+        }
+        
+        // Render gallery
+        function renderGallery() {
+            const container = document.getElementById('galleryContainer');
+            
+            if (allRecords.length === 0) {
+                container.innerHTML = '<div class="loading">No archived content found.</div>';
+                return;
+            }
+            
+            const html = allRecords.map(record => `
+                <div class="gallery-card" onclick="viewContent('${record.txId}')">
+                    <div class="card-preview">
+                        <img src="${BOT_CONFIG.gatewayUrl}/${record.txId}" 
+                             alt="${record.undername}" 
+                             onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';"
+                             onload="this.nextElementSibling.style.display='none';">
+                        <div class="preview-icon" style="display:flex;"><span class="icon-file"></span></div>
+                    </div>
+                    <div class="card-content">
+                        <div class="card-title">${record.undername}</div>
+                        <div class="card-meta">
+                            <span class="icon-user"></span> ${record.username} • ${record.isUploadedMedia ? '<span class="icon-camera"></span> Media' : '<span class="icon-link"></span> Link'} • ${new Date(record.timestamp).toLocaleDateString()}
+                        </div>
+                        <div class="card-links">
+                            <a href="${BOT_CONFIG.gatewayUrl}/${record.txId}" target="_blank" class="card-link" onclick="event.stopPropagation()">
+                                View on Arweave
+                            </a>
+                            <a href="${record.arnsUrl}" target="_blank" class="card-link" onclick="event.stopPropagation()">
+                                ArNS Domain
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            `).join('');
+            
+            container.innerHTML = `<div class="gallery-grid">${html}</div>`;
+        }
+        
+        // View content in new tab
+        function viewContent(txId) {
+            window.open(`${BOT_CONFIG.gatewayUrl}/${txId}`, '_blank');
+        }
+        
+        // Load gallery on page load
+        loadGallery();
+    </script>
 </body>
 </html>

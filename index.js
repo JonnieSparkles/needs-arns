@@ -29,23 +29,21 @@ const {
 const ANT_PROCESS_ID = requireEnv('ANT_PROCESS_ID');
 const WALLET_ADDRESS = process.env.WALLET_ADDRESS || 'Unknown';
 
-console.log('🔍 DEBUG: process.env.DEFAULT_TTL_SECONDS =', process.env.DEFAULT_TTL_SECONDS);
 const DEFAULT_TTL_SECONDS = parseInt(process.env.DEFAULT_TTL_SECONDS || '60', 10); // 60 seconds minimum
-console.log('🔍 DEBUG: DEFAULT_TTL_SECONDS =', DEFAULT_TTL_SECONDS);
 const POLL_INTERVAL_MS = parseInt(process.env.POLL_INTERVAL_MS || '960000', 10); // 16 minutes for free plan (with buffer)
 const RATE_LIMIT_BACKOFF_MS = 960000; // 16 minutes for Twitter free plan (with buffer)
 
 // Bot user ID (known from previous runs)
 const BOT_USER_ID = '1971034918240256000';
-console.log('Bot user id:', BOT_USER_ID, 'screen name: NeedsArNS');
+console.log('🤖 Bot initialized: @NeedsArNS');
 
 // Access control - comma-separated list of allowed usernames (without @)
 const ALLOWED_USERS = process.env.ALLOWED_USERS ? process.env.ALLOWED_USERS.split(',').map(u => u.trim().toLowerCase()) : [];
-console.log('🔐 Access control enabled for users:', ALLOWED_USERS.length > 0 ? ALLOWED_USERS : 'ALL USERS (no restrictions)');
+console.log('🔐 Access control:', ALLOWED_USERS.length > 0 ? ALLOWED_USERS.join(', ') : 'ALL USERS');
 
 // Time-based filtering - ignore mentions older than X hours
 const MENTION_MAX_AGE_HOURS = parseInt(process.env.MENTION_MAX_AGE_HOURS || '24', 10);
-console.log(`⏰ Time filter: ignoring mentions older than ${MENTION_MAX_AGE_HOURS} hours`);
+console.log(`⏰ Time filter: ${MENTION_MAX_AGE_HOURS}h max age`);
 
 // Persistent storage
 const DATA_DIR = process.env.RAILWAY_VOLUME_MOUNT_PATH || '.';
@@ -61,7 +59,7 @@ function saveProcessedState(processedMentions, sinceId, processedDetails = {}) {
       version: '1.1'
     };
     fs.writeFileSync(PROCESSED_MENTIONS_FILE, JSON.stringify(state, null, 2));
-    console.log(`💾 Saved state: ${state.processedMentions.length} processed mentions, since_id: ${sinceId || 'none'}`);
+    console.log(`💾 Saved: ${state.processedMentions.length} mentions, since_id: ${sinceId || 'none'}`);
   } catch (err) {
     console.error('❌ Failed to save processed state:', err.message);
   }
@@ -70,7 +68,7 @@ function saveProcessedState(processedMentions, sinceId, processedDetails = {}) {
 function loadProcessedState() {
   try {
     if (!fs.existsSync(PROCESSED_MENTIONS_FILE)) {
-      console.log('📂 No existing state file found, starting fresh');
+      console.log('📂 Starting fresh');
       return { processedMentions: new Set(), sinceId: undefined, processedDetails: {} };
     }
     
@@ -81,13 +79,12 @@ function loadProcessedState() {
     const sinceId = state.lastSinceId;
     const processedDetails = state.processedDetails || {};
     
-    console.log(`📂 Loaded state: ${processedMentions.size} processed mentions, since_id: ${sinceId || 'none'}`);
-    console.log(`📅 Last updated: ${state.lastUpdated || 'unknown'}`);
+    console.log(`📂 Loaded: ${processedMentions.size} mentions, since_id: ${sinceId || 'none'}`);
     
     return { processedMentions, sinceId, processedDetails };
   } catch (err) {
     console.error('❌ Failed to load processed state:', err.message);
-    console.log('📂 Starting fresh due to load error');
+    console.log('📂 Starting fresh');
     return { processedMentions: new Set(), sinceId: undefined, processedDetails: {} };
   }
 }
@@ -156,21 +153,33 @@ function getMediaUrls(tweetData, includes) {
   const mediaKeys = tweetData.attachments.media_keys;
   const mediaObjects = includes?.media || [];
   
-  console.log(`🔍 DEBUG: Media keys in tweet: ${JSON.stringify(mediaKeys)}`);
-  console.log(`🔍 DEBUG: Media objects in includes: ${JSON.stringify(mediaObjects)}`);
   
   return mediaKeys.map(key => {
     const mediaObj = mediaObjects.find(m => m.media_key === key);
     if (!mediaObj) {
-      console.log(`❌ DEBUG: No media object found for key: ${key}`);
       return null;
     }
     
-    console.log(`✅ DEBUG: Found media object: ${JSON.stringify(mediaObj)}`);
     
-    // Return the highest quality URL available
+    // For videos, try to get the highest quality variant
+    let bestUrl = mediaObj.url || mediaObj.preview_image_url;
+    
+    if (mediaObj.type === 'video' && mediaObj.variants) {
+      // Find the highest bitrate video variant
+      const videoVariants = mediaObj.variants.filter(v => v.content_type?.startsWith('video/'));
+      if (videoVariants.length > 0) {
+        const bestVariant = videoVariants.reduce((best, current) => {
+          const currentBitrate = current.bit_rate || 0;
+          const bestBitrate = best.bit_rate || 0;
+          return currentBitrate > bestBitrate ? current : best;
+        });
+        bestUrl = bestVariant.url;
+      }
+    }
+    
+    // Return the best URL available
     return {
-      url: mediaObj.url || mediaObj.preview_image_url,
+      url: bestUrl,
       type: mediaObj.type,
       width: mediaObj.width,
       height: mediaObj.height,
@@ -181,7 +190,7 @@ function getMediaUrls(tweetData, includes) {
 
 async function downloadMedia(mediaUrl) {
   try {
-    console.log(`📥 Downloading media from: ${mediaUrl}`);
+    console.log(`📥 Downloading: ${mediaUrl.split('/').pop()}`);
     const response = await fetch(mediaUrl);
     
     if (!response.ok) {
@@ -189,7 +198,7 @@ async function downloadMedia(mediaUrl) {
     }
     
     const buffer = await response.arrayBuffer();
-    console.log(`✅ Downloaded ${buffer.byteLength} bytes`);
+    console.log(`✅ Downloaded ${(buffer.byteLength / 1024).toFixed(1)}KB`);
     return Buffer.from(buffer);
   } catch (error) {
     console.error(`❌ Media download failed:`, error);
@@ -199,11 +208,10 @@ async function downloadMedia(mediaUrl) {
 
 async function uploadToArweave(mediaBuffer, contentType = 'application/octet-stream') {
   try {
-    console.log(`☁️ Uploading ${mediaBuffer.length} bytes to Arweave via Turbo...`);
+    console.log(`☁️ Uploading ${(mediaBuffer.length / 1024).toFixed(1)}KB to Arweave...`);
     
     // Check Turbo balance first
     const balance = await turbo.getBalance();
-    console.log(`💰 Turbo balance: ${balance.winc} winc`);
     
     // Upload file
     const uploadResult = await turbo.uploadFile({
@@ -218,8 +226,7 @@ async function uploadToArweave(mediaBuffer, contentType = 'application/octet-str
       }
     });
     
-    console.log(`✅ Uploaded to Arweave: ${uploadResult.id}`);
-    console.log(`💸 Cost: ${uploadResult.winc} winc`);
+    console.log(`✅ Uploaded: ${uploadResult.id} (${uploadResult.winc} winc)`);
     
     return uploadResult.id;
   } catch (error) {
@@ -313,6 +320,65 @@ async function reply(twitterClient, inReplyTo, body) {
   }
 }
 
+// Update archive after successful ArNS assignment
+async function updateArchive(mentionDetails) {
+  try {
+    console.log('📚 Updating archive...');
+    
+    // Read current archive
+    let archive = { metadata: { lastUpdated: '', totalRecords: 0, version: '1.0', description: 'NeedsArNS Bot Archive - All successfully archived content' }, records: [] };
+    
+    if (fs.existsSync('archive.json')) {
+      const archiveData = fs.readFileSync('archive.json', 'utf8');
+      archive = JSON.parse(archiveData);
+    }
+    
+    // Add new record
+    const newRecord = {
+      undername: mentionDetails.undername,
+      txId: mentionDetails.txId,
+      username: mentionDetails.username,
+      timestamp: mentionDetails.timestamp,
+      isUploadedMedia: mentionDetails.isUploadedMedia || false,
+      arnsUrl: `https://${mentionDetails.undername}_${OWNER_ARNS_NAME}.ar.io`
+    };
+    
+    
+    // Check if record already exists (avoid duplicates)
+    const existingIndex = archive.records.findIndex(r => r.undername === mentionDetails.undername);
+    if (existingIndex >= 0) {
+      archive.records[existingIndex] = newRecord;
+      console.log(`📝 Updated: ${mentionDetails.undername}`);
+    } else {
+      archive.records.push(newRecord);
+      console.log(`➕ Added: ${mentionDetails.undername}`);
+    }
+    
+    // Update metadata
+    archive.metadata.lastUpdated = new Date().toISOString();
+    archive.metadata.totalRecords = archive.records.length;
+    
+    // Save archive locally
+    fs.writeFileSync('archive.json', JSON.stringify(archive, null, 2));
+    console.log(`💾 Archive saved: ${archive.metadata.totalRecords} records`);
+    
+    // Upload archive to Arweave
+    const archiveContent = JSON.stringify(archive, null, 2);
+    const archiveTxId = await uploadToArweave(archiveContent, 'application/json');
+    console.log(`📤 Archive uploaded: ${archiveTxId}`);
+    const archiveArnsResult = await ant.setUndernameRecord({
+      undername: 'archive',
+      transactionId: archiveTxId,
+      ttlSeconds: 86400 // 24 hours
+    });
+    console.log(`✅ Archive assigned: archive_${OWNER_ARNS_NAME}.ar.io`);
+    
+  } catch (error) {
+    console.error('❌ Error updating archive:', error);
+    // Don't throw - archive update failure shouldn't break the main flow
+  }
+}
+
 async function verifyTxIdExists(txid) {
   // lightweight check via a HEAD request to a public gateway (optional)
   // To keep deps minimal we use fetch; Node 18+ has global fetch.
@@ -338,7 +404,7 @@ async function handleMention(twitterClient, mention, includes) {
       return;
     }
     
-    console.log(`🔍 Processing mention: ${mention.id} - "${mention.text}"`);
+    console.log(`🔍 Processing: ${mention.id}`);
     
     // Handle help command
     if (command.type === 'help') {
@@ -348,8 +414,8 @@ async function handleMention(twitterClient, mention, includes) {
         `📸 @NeedsArNS assign <name> (reply to media)`,
         `🔗 @NeedsArNS assign <name> (reply to Arweave link)`,
         ``,
+        `🎨 View Gallery: needsarns.ar.io`,
         `💳 Credit sharing: Coming soon!`,
-        `🏠 Homepage: needsarns.ar.io`,
         ``,
         `Powered by @ArNSdomains`
       ].join('\n');
@@ -359,7 +425,31 @@ async function handleMention(twitterClient, mention, includes) {
     }
     
     const undername = command.undername;
-    console.log(`🏷️ Extracted undername: ${undername}`);
+    console.log(`🏷️ Undername: ${undername}`);
+    
+    // Check if undername already exists BEFORE processing media
+    try {
+      const existingRecords = await ant.getRecords();
+      if (existingRecords && existingRecords[undername]) {
+        console.log(`❌ Name taken: ${undername}`);
+        
+        // Record failed assignment (name taken)
+        processedDetails[mention.id] = {
+          username: username,
+          undername: undername,
+          success: false,
+          reason: 'undername_taken',
+          timestamp: new Date().toISOString()
+        };
+        
+        await reply(twitterClient, mention.id, `❌ Undername '${undername}' is already taken. Try a different name.`);
+        return;
+      }
+        console.log(`✅ Name available: ${undername}`);
+    } catch (checkError) {
+      console.error(`❌ Error checking undername availability:`, checkError);
+      // Continue anyway - better to try and fail than to block on API issues
+    }
     
     // Check access control
     if (!isUserAllowed(mention, includes)) {
@@ -387,10 +477,10 @@ async function handleMention(twitterClient, mention, includes) {
     // We only act when the mention is in reply to a tweet (the parent should have the link)
     const parent = fetchParentTweet(includes, mention);
     if (!parent) {
-      console.log(`❌ No parent tweet found for mention ${mention.id}`);
+      console.log(`❌ No parent tweet: ${mention.id}`);
       return;
     }
-    console.log(`📝 Parent tweet found: ${parent.id} - "${parent.text}"`);
+    console.log(`📝 Parent: ${parent.id}`);
 
     // Check for existing Arweave links first (faster, cheaper)
     let txId = extractTxIdFromTweetData(parent);
@@ -398,14 +488,13 @@ async function handleMention(twitterClient, mention, includes) {
     
     if (txId) {
       // Handle existing Arweave link flow (PRIORITY)
-      console.log(`🔗 Found existing Arweave TXID: ${txId}`);
+      console.log(`🔗 Found TXID: ${txId}`);
       
       // Verify existing TXID
-      console.log(`🔍 Verifying TXID exists: ${txId}`);
-      const ok = await verifyTxIdExists(txId);
-      if (!ok) {
+    const ok = await verifyTxIdExists(txId);
+    if (!ok) {
         console.log(`❌ TXID verification failed: ${txId}`);
-        await reply(twitterClient, mention.id, `❌ That Arweave TXID didn't resolve: ${txId}`);
+      await reply(twitterClient, mention.id, `❌ That Arweave TXID didn't resolve: ${txId}`);
         return;
       }
       console.log(`✅ TXID verified: ${txId}`);
@@ -449,31 +538,7 @@ async function handleMention(twitterClient, mention, includes) {
       return;
     }
 
-    // Check if undername already exists first
-    console.log(`🔍 Checking if undername already exists: ${undername}`);
-    try {
-      const existingRecords = await ant.getRecords();
-      if (existingRecords && existingRecords[undername]) {
-        console.log(`❌ Undername '${undername}' already exists, pointing to: ${existingRecords[undername].transactionId}`);
-        
-        // Record failed assignment (name taken)
-        processedDetails[mention.id] = {
-          username: username,
-          undername: undername,
-          txId: txId,
-          success: false,
-          reason: 'undername_taken',
-          timestamp: new Date().toISOString()
-        };
-        
-        await reply(twitterClient, mention.id, `❌ Undername '${undername}' is already taken. Try a different name.`);
-        return;
-      }
-      console.log(`✅ Undername '${undername}' is available`);
-    } catch (checkError) {
-      console.log(`⚠️ Could not check existing records, proceeding with creation: ${checkError.message}`);
-      // If we can't check, proceed with creation and let the original error handling catch duplicates
-    }
+    // Undername availability already checked earlier
 
     // Write undername -> txid on your ArNS name
     console.log(`📝 Creating ArNS record: ${undername} → ${txId}`);
@@ -498,6 +563,15 @@ async function handleMention(twitterClient, mention, includes) {
         success: true,
         timestamp: new Date().toISOString()
       };
+      
+      // Update archive with new record
+      await updateArchive({
+        username: username,
+        undername: undername,
+        txId: txId,
+        isUploadedMedia: isUploadedMedia,
+        timestamp: new Date().toISOString()
+      });
       
     } catch (recordError) {
       if (recordError.message?.includes('already exists') || recordError.message?.includes('taken')) {
@@ -624,7 +698,7 @@ async function pollMentionsForever() {
       'tweet.fields': ['referenced_tweets', 'created_at', 'entities', 'text', 'author_id', 'attachments'],
       expansions: ['referenced_tweets.id', 'author_id', 'attachments.media_keys', 'referenced_tweets.id.attachments.media_keys'],
       'user.fields': ['username'],
-      'media.fields': ['type', 'url', 'preview_image_url', 'width', 'height'],
+      'media.fields': ['type', 'url', 'preview_image_url', 'width', 'height', 'variants'],
       max_results: 100
     });
       console.log(`📊 API Response: ${res._realData?.data?.length || 0} mentions found`);
