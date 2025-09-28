@@ -1,26 +1,53 @@
 # needs-arns
 
-🤖 **Production-ready Twitter bot** for ArNS (Arweave Name Service) that automatically assigns subdomains to Arweave transaction IDs.
+🤖 **Production-ready Twitter bot** for ArNS (Arweave Name Service) that automatically assigns subdomains to Arweave content.
 
-Built with enterprise-grade optimization, access control, and monitoring features.
+Built with enterprise-grade optimization, access control, monitoring, and **Turbo-powered media uploads**.
 
 ## How it works
 
+**Two modes of operation:**
+
+### Mode 1: Existing Arweave Links (Priority)
 1. 📝 **User posts** an Arweave transaction ID (works with any gateway: arweave.net, ar.io, arweave.live, etc.)
 2. 💬 **User replies** with `@yourbot assign <subdomain>` (if whitelisted)
-3. 🤖 **Bot creates** `subdomain.yourname.ar.io` → transaction ID mapping on ArNS mainnet
-4. 🎉 **Bot replies** with celebratory confirmation including both `ar://` and `.ar.io` formats
+3. 🤖 **Bot creates** `subdomain.yourname.ar.io` → existing transaction ID mapping
+4. 🎉 **Bot replies** with `🔗 Link assigned!` confirmation
 
-### Example Flow
+### Mode 2: Media Upload (Fallback)
+1. 📸 **User posts** image or video (no Arweave link)
+2. 💬 **User replies** with `@yourbot assign <subdomain>` (if whitelisted)  
+3. 🤖 **Bot downloads** media → **uploads to Arweave via Turbo** → **creates mapping**
+4. 🎉 **Bot replies** with `📸 Media uploaded & assigned!` confirmation
+
+### Example Flows
+
+**Existing Link:**
 ```
 Original Tweet: "Check out my NFT! https://arweave.net/abc123..."
 Reply: "@NeedsArNS assign cool-nft"
 
 Bot Response:
 🎉 Undername assigned!
+🔗 Link assigned!
 ar://cool-nft_yourname
 cool-nft_yourname.ar.io
 → abc123...
+
+Powered by @ArNSdomains
+```
+
+**Media Upload:**
+```
+Original Tweet: "My latest artwork! [IMAGE ATTACHED]"
+Reply: "@NeedsArNS assign my-art"
+
+Bot Response:  
+🎉 Undername assigned!
+📸 Media uploaded & assigned!
+ar://my-art_yourname
+my-art_yourname.ar.io
+→ xyz789...
 
 Powered by @ArNSdomains
 ```
@@ -64,6 +91,17 @@ MENTION_MAX_AGE_HOURS=24  # Only process mentions from last 24 hours
 npm install
 npm start
 ```
+
+### Turbo Credits (for Media Uploads)
+
+The bot uses [Turbo SDK](https://github.com/ardriveapp/turbo-sdk) for fast, reliable media uploads to Arweave.
+
+**Setup:**
+1. **Fund your wallet** with Turbo credits at [ardrive.io/turbo](https://ardrive.io/turbo/)
+2. **Check balance:** The bot logs your credit balance on startup
+3. **Monitor usage:** Each upload shows the cost in winc
+
+**Cost:** Small images are often free, larger files cost minimal credits.
 
 ## Deployment
 
@@ -117,7 +155,8 @@ The bot has been tested and confirmed working with:
 ## Technical Stack
 
 - **ArNS Integration**: `@ar.io/sdk` v3.20.0+ for mainnet ArNS operations
-- **Twitter API**: `twitter-api-v2` with optimized v2 endpoint usage
+- **Arweave Uploads**: `@ardrive/turbo-sdk` for fast, reliable media uploads with credits
+- **Twitter API**: `twitter-api-v2` with optimized v2 endpoint usage and media expansion
 - **Server**: `express` for health monitoring and debug endpoints
 - **Configuration**: `dotenv` for environment management
 - **Platform**: Node.js ES modules with async/await patterns
@@ -125,6 +164,9 @@ The bot has been tested and confirmed working with:
 ## Features
 
 ### Core Functionality
+- ✅ **Dual Mode Operation** - Handles both existing Arweave links and media uploads
+- ✅ **Media Upload** - Downloads Twitter images/videos and uploads to Arweave via Turbo SDK
+- ✅ **Smart Prioritization** - Prefers existing Arweave links over media uploads (faster, cheaper)
 - ✅ **Gateway-Agnostic** - Works with any Arweave gateway (arweave.net, ar-io.dev, arweave.live, custom domains)
 - ✅ **Mainnet Ready** - Configured for ArNS mainnet (ar.io)
 - ✅ **Sandbox Support** - Recognizes sandbox Arweave domains

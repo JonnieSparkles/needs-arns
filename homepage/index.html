@@ -1,0 +1,261 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NeedsArNS Bot - Arweave Name System</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+        }
+        
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 2rem;
+        }
+        
+        .card {
+            background: white;
+            border-radius: 16px;
+            padding: 3rem;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+            margin: 2rem 0;
+        }
+        
+        h1 {
+            font-size: 3rem;
+            font-weight: 700;
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            text-align: center;
+            margin-bottom: 1rem;
+        }
+        
+        .subtitle {
+            text-align: center;
+            font-size: 1.2rem;
+            color: #666;
+            margin-bottom: 3rem;
+        }
+        
+        .bot-handle {
+            background: #1da1f2;
+            color: white;
+            padding: 0.5rem 1rem;
+            border-radius: 20px;
+            font-weight: 600;
+            text-decoration: none;
+            display: inline-block;
+            margin: 0.5rem;
+        }
+        
+        .bot-handle:hover {
+            background: #0d8bd9;
+            transform: translateY(-2px);
+            transition: all 0.3s ease;
+        }
+        
+        .section {
+            margin: 2rem 0;
+        }
+        
+        .section h2 {
+            color: #333;
+            margin-bottom: 1rem;
+            font-size: 1.5rem;
+        }
+        
+        .command {
+            background: #f8f9fa;
+            border: 1px solid #e9ecef;
+            border-radius: 8px;
+            padding: 1rem;
+            margin: 0.5rem 0;
+            font-family: 'Monaco', 'Menlo', monospace;
+            font-size: 0.9rem;
+        }
+        
+        .feature {
+            display: flex;
+            align-items: center;
+            margin: 1rem 0;
+        }
+        
+        .feature-icon {
+            font-size: 1.5rem;
+            margin-right: 1rem;
+            width: 2rem;
+        }
+        
+        .cta-button {
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            color: white;
+            padding: 1rem 2rem;
+            border: none;
+            border-radius: 8px;
+            font-size: 1.1rem;
+            font-weight: 600;
+            text-decoration: none;
+            display: inline-block;
+            text-align: center;
+            margin: 1rem 0;
+            transition: transform 0.3s ease;
+        }
+        
+        .cta-button:hover {
+            transform: translateY(-2px);
+        }
+        
+        .status {
+            background: #d4edda;
+            border: 1px solid #c3e6cb;
+            color: #155724;
+            padding: 1rem;
+            border-radius: 8px;
+            margin: 1rem 0;
+        }
+        
+        .footer {
+            text-align: center;
+            margin-top: 3rem;
+            color: #666;
+        }
+        
+        .footer a {
+            color: #667eea;
+            text-decoration: none;
+        }
+        
+        @media (max-width: 600px) {
+            .container {
+                padding: 1rem;
+            }
+            
+            .card {
+                padding: 2rem;
+            }
+            
+            h1 {
+                font-size: 2rem;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="card">
+            <h1>🎉 NeedsArNS Bot</h1>
+            <p class="subtitle">Assign human-readable names to your Arweave content</p>
+            
+            <div style="text-align: center;">
+                <a href="https://twitter.com/NeedsArNS" class="bot-handle" target="_blank">
+                    @NeedsArNS
+                </a>
+            </div>
+            
+            <div class="status">
+                <strong>🚧 Currently in Private Beta</strong><br>
+                Access limited to whitelisted users. Public launch coming soon!
+            </div>
+            
+            <div class="section">
+                <h2>🚀 How It Works</h2>
+                <div class="feature">
+                    <span class="feature-icon">📸</span>
+                    <div>
+                        <strong>Media Upload Mode:</strong> Reply to any tweet with media using <code>@NeedsArNS assign &lt;name&gt;</code>
+                    </div>
+                </div>
+                <div class="feature">
+                    <span class="feature-icon">🔗</span>
+                    <div>
+                        <strong>Link Assignment Mode:</strong> Reply to tweets with existing Arweave links
+                    </div>
+                </div>
+                <div class="feature">
+                    <span class="feature-icon">⚡</span>
+                    <div>
+                        <strong>Powered by Turbo SDK:</strong> Fast, reliable uploads with programmable fiat payments
+                    </div>
+                </div>
+            </div>
+            
+            <div class="section">
+                <h2>💬 Commands</h2>
+                <div class="command">@NeedsArNS assign sparkles</div>
+                <p><em>Reply to a tweet with media or an Arweave link</em></p>
+                
+                <div class="command">@NeedsArNS help</div>
+                <p><em>Get help and see all available commands</em></p>
+            </div>
+            
+            <div class="section">
+                <h2>💰 Credit System (Coming Soon)</h2>
+                <p>Future features will include:</p>
+                <ul style="margin-left: 2rem; margin-top: 1rem;">
+                    <li>Fund your account with fiat payments via Stripe</li>
+                    <li>Share credits with @NeedsArNS bot for uploads</li>
+                    <li>Pay only for media uploads (existing links are free)</li>
+                    <li>Track usage and balance in real-time</li>
+                </ul>
+                
+                <div style="text-align: center; margin: 2rem 0;">
+                    <a href="https://turbo.ar.io/share" class="cta-button" target="_blank" style="opacity: 0.6; cursor: not-allowed;">
+                        💳 Share Credits with Bot (Coming Soon)
+                    </a>
+                </div>
+                
+                <div class="command" style="opacity: 0.6;">
+                    Bot Address: [BOT_WALLET_ADDRESS]<br>
+                    <em>Credit sharing will be available soon</em>
+                </div>
+            </div>
+            
+            <div class="section">
+                <h2>🔧 Technical Features</h2>
+                <div class="feature">
+                    <span class="feature-icon">🛡️</span>
+                    <div>Access control and user whitelisting</div>
+                </div>
+                <div class="feature">
+                    <span class="feature-icon">⏰</span>
+                    <div>Time-based mention filtering</div>
+                </div>
+                <div class="feature">
+                    <span class="feature-icon">💾</span>
+                    <div>Persistent storage across restarts</div>
+                </div>
+                <div class="feature">
+                    <span class="feature-icon">📊</span>
+                    <div>Detailed tracking and analytics</div>
+                </div>
+            </div>
+            
+            <div style="text-align: center; margin: 2rem 0;">
+                <a href="https://turbo.ardrive.io" class="cta-button" target="_blank">
+                    🚀 Try Turbo SDK
+                </a>
+            </div>
+            
+            <div class="footer">
+                <p>
+                    Built with ❤️ using <a href="https://github.com/ardriveapp/turbo-sdk" target="_blank">Turbo SDK</a> and <a href="https://ar.io" target="_blank">ArNS</a><br>
+                    <a href="https://github.com/ardriveapp" target="_blank">Powered by @ArNSdomains</a>
+                </p>
+            </div>
+        </div>
+    </div>
+</body>
+</html>
