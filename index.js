@@ -242,6 +242,64 @@ async function uploadToArweave(mediaBuffer, contentType = 'application/octet-str
   }
 }
 
+async function updateArchive(mentionDetails) {
+  try {
+    console.log('📚 Updating archive...');
+    let archive = { 
+      metadata: { 
+        lastUpdated: '', 
+        totalRecords: 0, 
+        version: '1.0', 
+        description: 'NeedsArNS Bot Archive - All successfully archived content' 
+      }, 
+      records: [] 
+    };
+    
+    if (fs.existsSync('archive.json')) {
+      const archiveData = fs.readFileSync('archive.json', 'utf8');
+      archive = JSON.parse(archiveData);
+    }
+    
+    const newRecord = {
+      undername: mentionDetails.undername,
+      txId: mentionDetails.txId,
+      username: mentionDetails.username,
+      timestamp: mentionDetails.timestamp,
+      isUploadedMedia: mentionDetails.isUploadedMedia || false
+    };
+    
+    const existingIndex = archive.records.findIndex(r => r.undername === mentionDetails.undername);
+    if (existingIndex >= 0) {
+      archive.records[existingIndex] = newRecord;
+      console.log(`📝 Updated: ${mentionDetails.undername}`);
+    } else {
+      archive.records.push(newRecord);
+      console.log(`➕ Added: ${mentionDetails.undername}`);
+    }
+    
+    archive.metadata.lastUpdated = new Date().toISOString();
+    archive.metadata.totalRecords = archive.records.length;
+    
+    fs.writeFileSync('archive.json', JSON.stringify(archive, null, 2));
+    console.log(`💾 Archive saved: ${archive.metadata.totalRecords} records`);
+    
+    // Upload archive to Arweave and assign archive undername
+    const archiveContent = JSON.stringify(archive, null, 2);
+    const archiveTxId = await uploadToArweave(archiveContent, 'application/json');
+    console.log(`📤 Archive uploaded: ${archiveTxId}`);
+    
+    const archiveArnsResult = await ant.setUndernameRecord({
+      undername: 'archive',
+      transactionId: archiveTxId,
+      ttlSeconds: 86400 // 24 hours
+    });
+    console.log(`✅ Archive assigned: archive_${OWNER_ARNS_NAME}.ar.io`);
+    
+  } catch (error) {
+    console.error('❌ Error updating archive:', error);
+  }
+}
+
 function isUserAllowed(mention, includes) {
   // If no access control is configured, allow all users
   if (ALLOWED_USERS.length === 0) {
@@ -327,117 +385,7 @@ async function reply(twitterClient, inReplyTo, body) {
   }
 }
 
-// Update archive after successful ArNS assignment
-async function updateArchive(mentionDetails) {
-  try {
-    console.log('📚 Updating archive...');
-    
-    // Read current archive
-    let archive = { metadata: { lastUpdated: '', totalRecords: 0, version: '1.0', description: 'NeedsArNS Bot Archive - All successfully archived content' }, records: [] };
-    
-    if (fs.existsSync('archive.json')) {
-      const archiveData = fs.readFileSync('archive.json', 'utf8');
-      archive = JSON.parse(archiveData);
-    }
-    
-    // Add new record
-    const newRecord = {
-      undername: mentionDetails.undername,
-      txId: mentionDetails.txId,
-      username: mentionDetails.username,
-      timestamp: mentionDetails.timestamp,
-      isUploadedMedia: mentionDetails.isUploadedMedia || false,
-      arnsUrl: `https://${mentionDetails.undername}_${OWNER_ARNS_NAME}.ar.io`,
-      metadataTxId: mentionDetails.metadataTxId
-    };
-    
-    
-    // Check if record already exists (avoid duplicates)
-    const existingIndex = archive.records.findIndex(r => r.undername === mentionDetails.undername);
-    if (existingIndex >= 0) {
-      archive.records[existingIndex] = newRecord;
-      console.log(`📝 Updated: ${mentionDetails.undername}`);
-    } else {
-      archive.records.push(newRecord);
-      console.log(`➕ Added: ${mentionDetails.undername}`);
-    }
-    
-    // Update metadata
-    archive.metadata.lastUpdated = new Date().toISOString();
-    archive.metadata.totalRecords = archive.records.length;
-    
-    // Save archive locally
-    fs.writeFileSync('archive.json', JSON.stringify(archive, null, 2));
-    console.log(`💾 Archive saved: ${archive.metadata.totalRecords} records`);
-    
-    // Upload archive to Arweave
-    const archiveContent = JSON.stringify(archive, null, 2);
-    const archiveTxId = await uploadToArweave(archiveContent, 'application/json');
-    console.log(`📤 Archive uploaded: ${archiveTxId}`);
-    const archiveArnsResult = await ant.setUndernameRecord({
-      undername: 'archive',
-      transactionId: archiveTxId,
-      ttlSeconds: 86400 // 24 hours
-    });
-    console.log(`✅ Archive assigned: archive_${OWNER_ARNS_NAME}.ar.io`);
-    
-  } catch (error) {
-    console.error('❌ Error updating archive:', error);
-    // Don't throw - archive update failure shouldn't break the main flow
-  }
-}
 
-// Create individual parent tweet archive
-async function createParentTweetArchive(parentTweet, parentUser, mention, undername, txId, isUploadedMedia) {
-  try {
-    console.log('📚 Creating parent tweet archive...');
-    
-    const archiveData = {
-      parent_tweet_id: parentTweet.id,
-      archived_timestamp: new Date().toISOString(),
-      assigned_undername: undername,
-      content_txId: txId,
-      isUploadedMedia: isUploadedMedia,
-      
-      parent_tweet: {
-        id: parentTweet.id,
-        text: parentTweet.text,
-        created_at: parentTweet.created_at,
-        public_metrics: parentTweet.public_metrics,
-        lang: parentTweet.lang,
-        possibly_sensitive: parentTweet.possibly_sensitive,
-        conversation_id: parentTweet.conversation_id,
-        entities: parentTweet.entities
-      },
-      
-      parent_user: {
-        id: parentUser.id,
-        username: parentUser.username,
-        name: parentUser.name,
-        verified: parentUser.verified,
-        public_metrics: parentUser.public_metrics,
-        created_at: parentUser.created_at,
-        description: parentUser.description
-      },
-      
-      requested_by: {
-        username: mention.username,
-        mention_id: mention.id,
-        mention_text: mention.text
-      }
-    };
-    
-    // Upload to Arweave
-    const metadataTxId = await uploadToArweave(JSON.stringify(archiveData, null, 2), 'application/json');
-    console.log(`📤 Parent tweet archive uploaded: ${metadataTxId}`);
-    
-    return metadataTxId;
-    
-  } catch (error) {
-    console.error('❌ Error creating parent tweet archive:', error);
-    return null; // Don't throw - archive creation failure shouldn't break the main flow
-  }
-}
 
 async function verifyTxIdExists(txid) {
   // lightweight check via a HEAD request to a public gateway (optional)
@@ -613,10 +561,6 @@ async function handleMention(twitterClient, mention, includes) {
       onchainId = result.id;
       console.log(`✅ ArNS record created: ${onchainId}`);
       
-      // Create parent tweet archive
-      const parentUser = fetchParentUser(includes, parent);
-      const metadataTxId = await createParentTweetArchive(parent, parentUser, mention, undername, txId, isUploadedMedia);
-      
       // Record successful assignment
       processedDetails[mention.id] = {
         username: username,
@@ -625,8 +569,7 @@ async function handleMention(twitterClient, mention, includes) {
         onchainId: onchainId,
         isUploadedMedia: isUploadedMedia,
         success: true,
-        timestamp: new Date().toISOString(),
-        metadataTxId: metadataTxId
+        timestamp: new Date().toISOString()
       };
       
       // Update archive with new record
@@ -635,8 +578,7 @@ async function handleMention(twitterClient, mention, includes) {
         undername: undername,
         txId: txId,
         isUploadedMedia: isUploadedMedia,
-        timestamp: new Date().toISOString(),
-        metadataTxId: metadataTxId
+        timestamp: new Date().toISOString()
       });
       
     } catch (recordError) {
