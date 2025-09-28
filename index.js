@@ -134,6 +134,13 @@ function fetchParentTweet(includes, mention) {
   return parent || null;
 }
 
+function fetchParentUser(includes, parentTweet) {
+  if (!parentTweet?.author_id) return null;
+  // Find the parent user in the includes data
+  const parentUser = includes?.users?.find(u => u.id === parentTweet.author_id);
+  return parentUser || null;
+}
+
 function extractTxIdFromTweetData(tweetData) {
   const text = tweetData?.text ?? '';
   const urls = tweetData?.entities?.urls ?? [];
@@ -340,7 +347,8 @@ async function updateArchive(mentionDetails) {
       username: mentionDetails.username,
       timestamp: mentionDetails.timestamp,
       isUploadedMedia: mentionDetails.isUploadedMedia || false,
-      arnsUrl: `https://${mentionDetails.undername}_${OWNER_ARNS_NAME}.ar.io`
+      arnsUrl: `https://${mentionDetails.undername}_${OWNER_ARNS_NAME}.ar.io`,
+      metadataTxId: mentionDetails.metadataTxId
     };
     
     
@@ -376,6 +384,58 @@ async function updateArchive(mentionDetails) {
   } catch (error) {
     console.error('❌ Error updating archive:', error);
     // Don't throw - archive update failure shouldn't break the main flow
+  }
+}
+
+// Create individual parent tweet archive
+async function createParentTweetArchive(parentTweet, parentUser, mention, undername, txId, isUploadedMedia) {
+  try {
+    console.log('📚 Creating parent tweet archive...');
+    
+    const archiveData = {
+      parent_tweet_id: parentTweet.id,
+      archived_timestamp: new Date().toISOString(),
+      assigned_undername: undername,
+      content_txId: txId,
+      isUploadedMedia: isUploadedMedia,
+      
+      parent_tweet: {
+        id: parentTweet.id,
+        text: parentTweet.text,
+        created_at: parentTweet.created_at,
+        public_metrics: parentTweet.public_metrics,
+        lang: parentTweet.lang,
+        possibly_sensitive: parentTweet.possibly_sensitive,
+        conversation_id: parentTweet.conversation_id,
+        entities: parentTweet.entities
+      },
+      
+      parent_user: {
+        id: parentUser.id,
+        username: parentUser.username,
+        name: parentUser.name,
+        verified: parentUser.verified,
+        public_metrics: parentUser.public_metrics,
+        created_at: parentUser.created_at,
+        description: parentUser.description
+      },
+      
+      requested_by: {
+        username: mention.username,
+        mention_id: mention.id,
+        mention_text: mention.text
+      }
+    };
+    
+    // Upload to Arweave
+    const metadataTxId = await uploadToArweave(JSON.stringify(archiveData, null, 2), 'application/json');
+    console.log(`📤 Parent tweet archive uploaded: ${metadataTxId}`);
+    
+    return metadataTxId;
+    
+  } catch (error) {
+    console.error('❌ Error creating parent tweet archive:', error);
+    return null; // Don't throw - archive creation failure shouldn't break the main flow
   }
 }
 
@@ -553,6 +613,10 @@ async function handleMention(twitterClient, mention, includes) {
       onchainId = result.id;
       console.log(`✅ ArNS record created: ${onchainId}`);
       
+      // Create parent tweet archive
+      const parentUser = fetchParentUser(includes, parent);
+      const metadataTxId = await createParentTweetArchive(parent, parentUser, mention, undername, txId, isUploadedMedia);
+      
       // Record successful assignment
       processedDetails[mention.id] = {
         username: username,
@@ -561,7 +625,8 @@ async function handleMention(twitterClient, mention, includes) {
         onchainId: onchainId,
         isUploadedMedia: isUploadedMedia,
         success: true,
-        timestamp: new Date().toISOString()
+        timestamp: new Date().toISOString(),
+        metadataTxId: metadataTxId
       };
       
       // Update archive with new record
@@ -570,7 +635,8 @@ async function handleMention(twitterClient, mention, includes) {
         undername: undername,
         txId: txId,
         isUploadedMedia: isUploadedMedia,
-        timestamp: new Date().toISOString()
+        timestamp: new Date().toISOString(),
+        metadataTxId: metadataTxId
       });
       
     } catch (recordError) {
@@ -695,9 +761,9 @@ async function pollMentionsForever() {
       console.log(`🔍 Fetching mentions since_id: ${actualSinceId || 'none'}${isFirstPoll ? ' (first poll - getting all recent)' : ''}`);
     const res = await twitter.v2.userMentionTimeline(BOT_USER_ID, {
       since_id: actualSinceId,
-      'tweet.fields': ['referenced_tweets', 'created_at', 'entities', 'text', 'author_id', 'attachments'],
+      'tweet.fields': ['referenced_tweets', 'created_at', 'entities', 'text', 'author_id', 'attachments', 'public_metrics', 'lang', 'possibly_sensitive', 'conversation_id'],
       expansions: ['referenced_tweets.id', 'author_id', 'attachments.media_keys', 'referenced_tweets.id.attachments.media_keys'],
-      'user.fields': ['username'],
+      'user.fields': ['username', 'name', 'verified', 'public_metrics', 'created_at', 'description'],
       'media.fields': ['type', 'url', 'preview_image_url', 'width', 'height', 'variants'],
       max_results: 100
     });
