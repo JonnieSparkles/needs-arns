@@ -1,0 +1,449 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NeedsArNS Gallery - Archived Content</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+        }
+        
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 2rem;
+        }
+        
+        .header {
+            background: white;
+            border-radius: 16px;
+            padding: 2rem;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+            margin-bottom: 2rem;
+            text-align: center;
+        }
+        
+        h1 {
+            font-size: 2.5rem;
+            font-weight: 700;
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            background-clip: text;
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            margin-bottom: 1rem;
+        }
+        
+        .subtitle {
+            color: #666;
+            font-size: 1.1rem;
+            margin-bottom: 1.5rem;
+        }
+        
+        .stats {
+            display: flex;
+            justify-content: center;
+            gap: 2rem;
+            margin-top: 1rem;
+        }
+        
+        .stat {
+            text-align: center;
+        }
+        
+        .stat-number {
+            font-size: 2rem;
+            font-weight: 700;
+            color: #667eea;
+        }
+        
+        .stat-label {
+            color: #666;
+            font-size: 0.9rem;
+        }
+        
+        .controls {
+            background: white;
+            border-radius: 16px;
+            padding: 1.5rem;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+            margin-bottom: 2rem;
+            display: flex;
+            gap: 1rem;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+        
+        .search-box {
+            flex: 1;
+            min-width: 200px;
+            padding: 0.75rem 1rem;
+            border: 2px solid #e9ecef;
+            border-radius: 8px;
+            font-size: 1rem;
+            transition: border-color 0.3s ease;
+        }
+        
+        .search-box:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+        
+        .filter-select {
+            padding: 0.75rem 1rem;
+            border: 2px solid #e9ecef;
+            border-radius: 8px;
+            font-size: 1rem;
+            background: white;
+            cursor: pointer;
+        }
+        
+        .sort-select {
+            padding: 0.75rem 1rem;
+            border: 2px solid #e9ecef;
+            border-radius: 8px;
+            font-size: 1rem;
+            background: white;
+            cursor: pointer;
+        }
+        
+        .gallery-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+            gap: 2rem;
+            margin-top: 2rem;
+        }
+        
+        .gallery-card {
+            background: white;
+            border-radius: 16px;
+            overflow: hidden;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+            transition: transform 0.3s ease, box-shadow 0.3s ease;
+            cursor: pointer;
+        }
+        
+        .gallery-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 30px 60px rgba(0,0,0,0.15);
+        }
+        
+        .card-preview {
+            width: 100%;
+            height: 200px;
+            background: linear-gradient(135deg, #f8f9fa, #e9ecef);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .card-preview img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+        
+        .card-preview .preview-icon {
+            font-size: 3rem;
+            color: #667eea;
+        }
+        
+        .card-content {
+            padding: 1.5rem;
+        }
+        
+        .card-title {
+            font-size: 1.2rem;
+            font-weight: 600;
+            color: #333;
+            margin-bottom: 0.5rem;
+        }
+        
+        .card-meta {
+            color: #666;
+            font-size: 0.9rem;
+            margin-bottom: 1rem;
+        }
+        
+        .card-links {
+            display: flex;
+            gap: 0.5rem;
+            flex-wrap: wrap;
+        }
+        
+        .card-link {
+            padding: 0.5rem 1rem;
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            color: white;
+            text-decoration: none;
+            border-radius: 6px;
+            font-size: 0.9rem;
+            font-weight: 500;
+            transition: transform 0.2s ease;
+        }
+        
+        .card-link:hover {
+            transform: translateY(-2px);
+        }
+        
+        .loading {
+            text-align: center;
+            padding: 4rem;
+            color: #666;
+            font-size: 1.1rem;
+        }
+        
+        .error {
+            background: #fee;
+            color: #c33;
+            padding: 1rem;
+            border-radius: 8px;
+            margin: 2rem 0;
+            text-align: center;
+        }
+        
+        .back-link {
+            display: inline-block;
+            margin-bottom: 1rem;
+            color: white;
+            text-decoration: none;
+            font-weight: 500;
+            padding: 0.5rem 1rem;
+            background: rgba(255,255,255,0.2);
+            border-radius: 8px;
+            transition: background 0.3s ease;
+        }
+        
+        .back-link:hover {
+            background: rgba(255,255,255,0.3);
+        }
+        
+        @media (max-width: 768px) {
+            .container {
+                padding: 1rem;
+            }
+            
+            .controls {
+                flex-direction: column;
+                align-items: stretch;
+            }
+            
+            .gallery-grid {
+                grid-template-columns: 1fr;
+            }
+            
+            .stats {
+                flex-direction: column;
+                gap: 1rem;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <a href="index.html" class="back-link">← Back to Homepage</a>
+        
+        <div class="header">
+            <h1>🎨 NeedsArNS Gallery</h1>
+            <p class="subtitle">All content archived by the NeedsArNS bot</p>
+            
+            <div class="stats">
+                <div class="stat">
+                    <div class="stat-number" id="totalCount">-</div>
+                    <div class="stat-label">Total Items</div>
+                </div>
+                <div class="stat">
+                    <div class="stat-number" id="mediaCount">-</div>
+                    <div class="stat-label">Media Uploads</div>
+                </div>
+                <div class="stat">
+                    <div class="stat-number" id="linkCount">-</div>
+                    <div class="stat-label">Link Assignments</div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="controls">
+            <input type="text" class="search-box" id="searchInput" placeholder="Search by name or transaction ID...">
+            <select class="sort-select" id="sortSelect">
+                <option value="name">Name A-Z</option>
+                <option value="name-desc">Name Z-A</option>
+                <option value="ttl">TTL Low-High</option>
+                <option value="ttl-desc">TTL High-Low</option>
+            </select>
+        </div>
+        
+        <div id="galleryContainer">
+            <div class="loading">Loading gallery...</div>
+        </div>
+    </div>
+
+    <script>
+        // Configuration - Update these for your bot
+        const BOT_CONFIG = {
+            arnsName: 'needsarns', // Your bot's ArNS name
+            gatewayUrl: window.location.protocol + '//' + window.location.hostname + (window.location.port ? ':' + window.location.port : ''),
+            cuUrl: 'https://cu.ao-testnet.xyz' // Update to mainnet when ready
+        };
+        
+        let allRecords = [];
+        let filteredRecords = [];
+        
+        // Load and display gallery
+        async function loadGallery() {
+            try {
+                document.getElementById('galleryContainer').innerHTML = '<div class="loading">Loading gallery...</div>';
+                
+                // Fetch ArNS records
+                const records = await fetchArNSRecords();
+                allRecords = records;
+                filteredRecords = [...records];
+                
+                updateStats();
+                renderGallery();
+                
+            } catch (error) {
+                console.error('Error loading gallery:', error);
+                document.getElementById('galleryContainer').innerHTML = 
+                    '<div class="error">Failed to load gallery. Please try again later.</div>';
+            }
+        }
+        
+        // Fetch ArNS records dynamically
+        async function fetchArNSRecords() {
+            try {
+                // Fetch the ArNS contract data
+                const contractResponse = await fetch(`${BOT_CONFIG.gatewayUrl}/${BOT_CONFIG.arnsName}`);
+                if (!contractResponse.ok) {
+                    throw new Error(`Failed to fetch ArNS contract: ${contractResponse.status}`);
+                }
+                
+                const contractData = await contractResponse.json();
+                
+                // Extract all undername records
+                const records = [];
+                for (const [undername, recordData] of Object.entries(contractData.records || {})) {
+                    if (recordData && recordData.txId) {
+                        records.push({
+                            undername: undername,
+                            txId: recordData.txId,
+                            ttl: recordData.ttl || 'unknown',
+                            // We'll determine content type dynamically
+                        });
+                    }
+                }
+                
+                // Sort by undername for consistent display
+                records.sort((a, b) => a.undername.localeCompare(b.undername));
+                
+                return records;
+            } catch (error) {
+                console.error('Error fetching ArNS records:', error);
+                throw new Error(`Failed to load ArNS records: ${error.message}`);
+            }
+        }
+        
+        // Update statistics
+        function updateStats() {
+            const total = allRecords.length;
+            // Since we're not distinguishing types, just show total
+            document.getElementById('totalCount').textContent = total;
+            document.getElementById('mediaCount').textContent = total;
+            document.getElementById('linkCount').textContent = total;
+        }
+        
+        // Render gallery
+        function renderGallery() {
+            const container = document.getElementById('galleryContainer');
+            
+            if (filteredRecords.length === 0) {
+                container.innerHTML = '<div class="loading">No items found matching your criteria.</div>';
+                return;
+            }
+            
+            const html = filteredRecords.map(record => `
+                <div class="gallery-card" onclick="viewContent('${record.txId}')">
+                    <div class="card-preview">
+                        <img src="${BOT_CONFIG.gatewayUrl}/${record.txId}" 
+                             alt="${record.undername}" 
+                             onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';"
+                             onload="this.nextElementSibling.style.display='none';">
+                        <div class="preview-icon" style="display:flex;">📄</div>
+                    </div>
+                    <div class="card-content">
+                        <div class="card-title">${record.undername}</div>
+                        <div class="card-meta">
+                            📋 ArNS Record • TTL: ${record.ttl}s
+                        </div>
+                        <div class="card-links">
+                            <a href="${BOT_CONFIG.gatewayUrl}/${record.txId}" target="_blank" class="card-link" onclick="event.stopPropagation()">
+                                View on Arweave
+                            </a>
+                            <a href="https://${record.undername}_${BOT_CONFIG.arnsName}.ar.io" target="_blank" class="card-link" onclick="event.stopPropagation()">
+                                ArNS Domain
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            `).join('');
+            
+            container.innerHTML = `<div class="gallery-grid">${html}</div>`;
+        }
+        
+        // Filter and search
+        function filterRecords() {
+            const searchTerm = document.getElementById('searchInput').value.toLowerCase();
+            const sortBy = document.getElementById('sortSelect').value;
+            
+            filteredRecords = allRecords.filter(record => {
+                const matchesSearch = record.undername.toLowerCase().includes(searchTerm) ||
+                                    record.txId.toLowerCase().includes(searchTerm);
+                
+                return matchesSearch;
+            });
+            
+            // Sort
+            filteredRecords.sort((a, b) => {
+                switch (sortBy) {
+                    case 'name':
+                        return a.undername.localeCompare(b.undername);
+                    case 'name-desc':
+                        return b.undername.localeCompare(a.undername);
+                    case 'ttl':
+                        return parseInt(a.ttl) - parseInt(b.ttl);
+                    case 'ttl-desc':
+                        return parseInt(b.ttl) - parseInt(a.ttl);
+                    default:
+                        return 0;
+                }
+            });
+            
+            renderGallery();
+        }
+        
+        // View content in new tab
+        function viewContent(txId) {
+            window.open(`${BOT_CONFIG.gatewayUrl}/${txId}`, '_blank');
+        }
+        
+        // Event listeners
+        document.getElementById('searchInput').addEventListener('input', filterRecords);
+        document.getElementById('sortSelect').addEventListener('change', filterRecords);
+        
+        // Load gallery on page load
+        loadGallery();
+    </script>
+</body>
+</html>

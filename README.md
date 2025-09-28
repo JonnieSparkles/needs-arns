@@ -22,6 +22,13 @@ Built with enterprise-grade optimization, access control, monitoring, and **Turb
 
 **Note:** For posts with multiple images/videos, the bot processes only the **first media attachment** to keep the experience simple and predictable.
 
+### Archive System
+After each successful assignment, the bot automatically:
+1. 📚 **Updates Archive** - Adds the new record to `archive.json`
+2. 📤 **Uploads to Arweave** - Uploads the archive via Turbo SDK
+3. 🏷️ **Assigns ArNS** - Creates `archive_yourname.ar.io` pointing to the archive
+4. 🎨 **Public Gallery** - Homepage displays all archived content with rich metadata
+
 ### Example Flows
 
 **Existing Link:**
@@ -191,6 +198,13 @@ The bot has been tested and confirmed working with:
 - ✅ **Undername Validation** - Enforces ArNS naming rules (1-51 chars, a-z, 0-9, -, _)
 - ✅ **Friendly Denial Messages** - Polite responses for unauthorized users
 
+### Archive System
+- ✅ **Live Archive** - Automatically maintains a public archive of all successfully assigned content
+- ✅ **Auto-Upload** - Archive gets uploaded to Arweave and assigned to `archive_yourname.ar.io`
+- ✅ **Rich Metadata** - Includes username, timestamp, media type, and ArNS URLs
+- ✅ **Public Gallery** - Homepage displays all archived content with image previews
+- ✅ **Real-time Updates** - Archive updates automatically with every successful assignment
+
 ### Development & Monitoring
 - ✅ **Enhanced Logging** - Detailed console output with emojis for easy debugging
 - ✅ **Health Monitoring** - Built-in health check and debug endpoints with bot status
@@ -253,3 +267,35 @@ The bot automatically creates and maintains `processed_mentions.json` with detai
 - 📈 **Usage Analytics**: See who's using the bot and what names they're claiming
 - 🛡️ **Security Monitoring**: Track access denial attempts and errors
 - ⏰ **Time Filtering**: Automatically ignores mentions older than configured threshold
+
+### Archive File
+The bot automatically creates and maintains `archive.json` with public gallery data:
+
+```json
+{
+  "metadata": {
+    "lastUpdated": "2025-09-28T03:51:36.330Z",
+    "totalRecords": 8,
+    "version": "1.0",
+    "description": "NeedsArNS Bot Archive - All successfully archived content"
+  },
+  "records": [
+    {
+      "undername": "sparkles",
+      "txId": "JT8Am2siXDVuaaAsLiHz8mVraEN7OSHxHkhvf6dJrpc",
+      "username": "JonnieSparkles",
+      "timestamp": "2025-09-28T03:33:28.649Z",
+      "isUploadedMedia": true,
+      "arnsUrl": "https://sparkles_needsarns.ar.io"
+    }
+  ]
+}
+```
+
+### Archive Benefits
+- 🎨 **Public Gallery**: Clean, organized display of all archived content
+- 📤 **Auto-Upload**: Automatically uploaded to Arweave and assigned to `archive_yourname.ar.io`
+- 🔗 **Rich Links**: Includes both Arweave and ArNS URLs for each record
+- 👤 **User Attribution**: Shows which user created each archive entry
+- 📸 **Media Type**: Distinguishes between uploaded media and existing links
+- ⏰ **Chronological**: Maintains timestamp order for easy browsing
