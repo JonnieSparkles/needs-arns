@@ -154,21 +154,22 @@ function hasMediaAttachments(tweetData) {
   return tweetData.attachments?.media_keys?.length > 0;
 }
 
-function getMediaUrls(tweetData, includes) {
+async function getMediaUrls(tweetData, includes) {
   if (!hasMediaAttachments(tweetData)) return [];
   
   const mediaKeys = tweetData.attachments.media_keys;
   const mediaObjects = includes?.media || [];
   
-  
-  return mediaKeys.map(key => {
+  // Process each media item asynchronously
+  const results = await Promise.all(mediaKeys.map(async (key) => {
     const mediaObj = mediaObjects.find(m => m.media_key === key);
     if (!mediaObj) {
       return null;
     }
     
+    console.log(`🔍 Processing media: type=${mediaObj.type}, hasUrl=${!!mediaObj.url}, hasPreview=${!!mediaObj.preview_image_url}, hasVariants=${!!mediaObj.variants}`);
     
-    // For videos, try to get the highest quality variant
+    // For videos and animated GIFs, try to get the highest quality variant
     let bestUrl = mediaObj.url || mediaObj.preview_image_url;
     
     if (mediaObj.type === 'video' && mediaObj.variants) {
@@ -181,8 +182,64 @@ function getMediaUrls(tweetData, includes) {
           return currentBitrate > bestBitrate ? current : best;
         });
         bestUrl = bestVariant.url;
+        console.log(`📹 Selected video variant: ${bestVariant.content_type}, bitrate: ${bestVariant.bit_rate}`);
       }
     }
+    
+    // For animated GIFs, try to get the original URL if available
+    // Twitter sometimes serves animated GIFs as 'photo' type but with a direct URL
+    if (mediaObj.type === 'photo' && mediaObj.url && !mediaObj.url.includes('pbs.twimg.com/media/')) {
+      // This might be a direct link to an animated GIF
+      console.log(`🖼️ Photo with direct URL: ${mediaObj.url}`);
+    }
+    
+    // Handle Twitter video thumbnails - try to get the actual GIF/MP4
+    if (bestUrl && bestUrl.includes('tweet_video_thumb')) {
+      console.log(`🎬 Detected video thumbnail, attempting to get original...`);
+      
+      // Extract the media ID from the thumbnail URL
+      // Format: https://pbs.twimg.com/tweet_video_thumb/MEDIA_ID.jpg
+      const thumbMatch = bestUrl.match(/tweet_video_thumb\/([^\/]+)\.jpg/);
+      if (thumbMatch) {
+        const mediaId = thumbMatch[1];
+        
+        // Try different possible URLs for the original media
+        const possibleUrls = [
+          `https://video.twimg.com/tweet_video/${mediaId}.mp4`,
+          `https://pbs.twimg.com/tweet_video/${mediaId}.mp4`,
+          `https://video.twimg.com/tweet_video/${mediaId}.gif`,
+          `https://pbs.twimg.com/tweet_video/${mediaId}.gif`,
+          `https://pbs.twimg.com/media/${mediaId}.mp4`,
+          `https://pbs.twimg.com/media/${mediaId}.gif`
+        ];
+        
+        console.log(`🔍 Trying to find original media for ID: ${mediaId}`);
+        
+        let foundOriginal = false;
+        // Try each URL to see which one works
+        for (const testUrl of possibleUrls) {
+          try {
+            const testResponse = await fetch(testUrl, { method: 'HEAD' });
+            if (testResponse.ok) {
+              console.log(`✅ Found original media: ${testUrl}`);
+              bestUrl = testUrl;
+              foundOriginal = true;
+              break;
+            }
+          } catch (e) {
+            // Continue to next URL
+          }
+        }
+        
+        // If we couldn't find the original, return null (no media)
+        if (!foundOriginal) {
+          console.log(`❌ Could not find original media for animated GIF, skipping...`);
+          return null;
+        }
+      }
+    }
+    
+    console.log(`✅ Final media URL: ${bestUrl}`);
     
     // Return the best URL available
     return {
@@ -192,7 +249,9 @@ function getMediaUrls(tweetData, includes) {
       height: mediaObj.height,
       media_key: key
     };
-  }).filter(Boolean);
+  }));
+  
+  return results.filter(Boolean);
 }
 
 async function downloadMedia(mediaUrl) {
@@ -291,7 +350,7 @@ async function updateArchive(mentionDetails) {
     const archiveArnsResult = await ant.setUndernameRecord({
       undername: 'archive',
       transactionId: archiveTxId,
-      ttlSeconds: 86400 // 24 hours
+      ttlSeconds: DEFAULT_TTL_SECONDS
     });
     console.log(`✅ Archive assigned: archive_${OWNER_ARNS_NAME}.ar.io`);
     
@@ -510,7 +569,7 @@ async function handleMention(twitterClient, mention, includes) {
     } else if (hasMediaAttachments(parent)) {
       // Fallback: Handle media upload flow
       console.log(`📱 No Arweave link found, checking for media attachments`);
-      const mediaUrls = getMediaUrls(parent, includes);
+      const mediaUrls = await getMediaUrls(parent, includes);
       
       if (mediaUrls.length === 0) {
         console.log(`❌ No accessible media URLs found in parent tweet ${parent.id}`);
@@ -526,7 +585,7 @@ async function handleMention(twitterClient, mention, includes) {
         // Download and upload media
         const mediaBuffer = await downloadMedia(media.url);
         const contentType = media.type === 'photo' ? 'image/jpeg' : 
-                           media.type === 'video' ? 'video/mp4' : 
+                           media.type === 'video' || media.type === 'animated_gif' ? 'video/mp4' : 
                            'application/octet-stream';
         
         txId = await uploadToArweave(mediaBuffer, contentType);
@@ -706,7 +765,7 @@ async function pollMentionsForever() {
       'tweet.fields': ['referenced_tweets', 'created_at', 'entities', 'text', 'author_id', 'attachments', 'public_metrics', 'lang', 'possibly_sensitive', 'conversation_id'],
       expansions: ['referenced_tweets.id', 'author_id', 'attachments.media_keys', 'referenced_tweets.id.attachments.media_keys'],
       'user.fields': ['username', 'name', 'verified', 'public_metrics', 'created_at', 'description'],
-      'media.fields': ['type', 'url', 'preview_image_url', 'width', 'height', 'variants'],
+      'media.fields': ['type', 'url', 'preview_image_url', 'width', 'height', 'variants', 'public_metrics', 'alt_text'],
       max_results: 100
     });
       console.log(`📊 API Response: ${res._realData?.data?.length || 0} mentions found`);
