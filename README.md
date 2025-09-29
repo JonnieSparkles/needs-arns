@@ -11,7 +11,7 @@ Built with enterprise-grade optimization, access control, monitoring, and **Turb
 ### Mode 1: Existing Arweave Links (Priority)
 1. 📝 **User posts** an Arweave transaction ID (works with any gateway: arweave.net, ar.io, arweave.live, etc.)
 2. 💬 **User replies** with `@yourbot assign <subdomain>` (if whitelisted)
-3. 🤖 **Bot creates** `subdomain.yourname.ar.io` → existing transaction ID mapping
+3. 🤖 **Bot creates** `undername_rootname.ar.io` → existing transaction ID mapping
 4. 🎉 **Bot replies** with `🔗 Link assigned!` confirmation
 
 ### Mode 2: Media Upload (Fallback)
@@ -161,13 +161,25 @@ The bot has been tested and confirmed working with:
 - 🔍 **Smart Validation**: Only processes mentions starting with @NeedsArNS
 - 📈 **Audit Trail**: Complete history of all processed mentions with timestamps
 
-## Technical Stack
+## Technical Stack & SDK References
 
-- **ArNS Integration**: `@ar.io/sdk` v3.20.0+ for mainnet ArNS operations
-- **Arweave Uploads**: `@ardrive/turbo-sdk` for fast, reliable media uploads with credits
-- **Twitter API**: `twitter-api-v2` with optimized v2 endpoint usage and media expansion
-- **Server**: `express` for health monitoring and debug endpoints
-- **Configuration**: `dotenv` for environment management
+### Primary SDKs (AI Reference)
+- **ArNS SDK**: [`@ar.io/sdk`](https://github.com/ar-io/ar-io-sdk) v3.20.0+
+  - **Purpose**: ArNS subdomain management and record operations
+  - **Key Methods**: `ANT.init()`, `setUndernameRecord()`, `getRecords()`, `getRecord()`
+  - **Critical Notes**: Always include `owner` field when updating records, TTL limits 60-86400 seconds
+  - **Documentation**: https://github.com/ar-io/ar-io-sdk
+
+- **Turbo SDK**: [`@ardrive/turbo-sdk`](https://github.com/ardriveapp/turbo-sdk) v1.31.1
+  - **Purpose**: Fast Arweave media uploads with credit system
+  - **Key Methods**: `TurboFactory.authenticated()`, `uploadFile()`, `getBalance()`
+  - **Critical Notes**: Requires Turbo credits from ardrive.io/turbo, use `fileStreamFactory` and `fileSizeFactory`
+  - **Documentation**: https://github.com/ardriveapp/turbo-sdk
+
+### Supporting Libraries
+- **Twitter API**: [`twitter-api-v2`](https://github.com/PLhery/node-twitter-api-v2) v1.16.0
+- **Server**: [`express`](https://expressjs.com/) v4.19.2
+- **Configuration**: [`dotenv`](https://github.com/motdotla/dotenv) v17.2.2
 - **Platform**: Node.js ES modules with async/await patterns
 
 ## Features

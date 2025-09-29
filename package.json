@@ -12,5 +12,12 @@
     "dotenv": "^17.2.2",
     "express": "^4.19.2",
     "twitter-api-v2": "^1.16.0"
+  },
+  "sdkDocumentation": {
+    "ar.io": "https://github.com/ar-io/ar-io-sdk",
+    "turbo": "https://github.com/ardriveapp/turbo-sdk",
+    "twitter": "https://github.com/PLhery/node-twitter-api-v2",
+    "express": "https://expressjs.com/",
+    "dotenv": "https://github.com/motdotla/dotenv"
   }
 }
