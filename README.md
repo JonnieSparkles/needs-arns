@@ -297,17 +297,8 @@ The bot automatically creates and maintains `archive.json` with public gallery d
       "txId": "JT8Am2siXDVuaaAsLiHz8mVraEN7OSHxHkhvf6dJrpc",
       "username": "JonnieSparkles",
       "timestamp": "2025-09-28T03:33:28.649Z",
-      "isUploadedMedia": true,
-      "arnsUrl": "https://sparkles_needsarns.ar.io"
+      "isUploadedMedia": true
     }
   ]
 }
 ```
-
-### Archive Benefits
-- 🎨 **Public Gallery**: Clean, organized display of all archived content
-- 📤 **Auto-Upload**: Automatically uploaded to Arweave and assigned to `archive_yourname.ar.io`
-- 🔗 **Rich Links**: Includes both Arweave and ArNS URLs for each record
-- 👤 **User Attribution**: Shows which user created each archive entry
-- 📸 **Media Type**: Distinguishes between uploaded media and existing links
-- ⏰ **Chronological**: Maintains timestamp order for easy browsing
