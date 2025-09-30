@@ -127,14 +127,6 @@ Also compatible with: Heroku, Vercel, DigitalOcean App Platform, AWS, GCP, Azure
 
 ## Testing
 
-### Twitter API Test
-```bash
-cd hello-bot
-npm install
-# Set Twitter env vars
-node index.js
-```
-
 ### ArNS Functionality Test
 The bot has been tested and confirmed working with:
 - ✅ Real Arweave transaction IDs
@@ -204,6 +196,7 @@ The bot has been tested and confirmed working with:
 - ✅ **Time-based Filtering** - Configurable time window for processing mentions (default: 24h)
 - ✅ **Persistent Storage** - Remembers processed mentions across restarts via JSON file
 - ✅ **Natural Response Timing** - 1-minute delay before replying to feel more human
+- ✅ **Content Promotion** - Automatically retweets success messages to promote archived content
 - ✅ **Error Handling** - Graceful error handling with user feedback
 - ✅ **Taken Undername Detection** - Handles already-taken undernames gracefully
 - ✅ **Multi-line Mention Support** - Handles mentions that span multiple lines

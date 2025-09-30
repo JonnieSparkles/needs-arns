@@ -33,6 +33,10 @@ const DEFAULT_TTL_SECONDS = parseInt(process.env.DEFAULT_TTL_SECONDS || '60', 10
 const POLL_INTERVAL_MS = parseInt(process.env.POLL_INTERVAL_MS || '960000', 10); // 16 minutes for free plan (with buffer)
 const RATE_LIMIT_BACKOFF_MS = 960000; // 16 minutes for Twitter free plan (with buffer)
 
+// Retweet rate limiting
+let lastRetweetTime = 0;
+const RETWEET_COOLDOWN_MS = 60000; // 1 minute between retweets (more conservative)
+
 // Bot user ID (known from previous runs)
 const BOT_USER_ID = '1971034918240256000';
 console.log('🤖 Bot initialized: @NeedsArNS');
@@ -448,10 +452,27 @@ async function reply(twitterClient, inReplyTo, body) {
 
 async function retweet(twitterClient, tweetId) {
   try {
+    // Check if we need to wait due to rate limiting
+    const now = Date.now();
+    const timeSinceLastRetweet = now - lastRetweetTime;
+    
+    if (timeSinceLastRetweet < RETWEET_COOLDOWN_MS) {
+      const waitTime = RETWEET_COOLDOWN_MS - timeSinceLastRetweet;
+      console.log(`⏳ Waiting ${Math.ceil(waitTime/1000)}s before retweet to avoid rate limits...`);
+      await new Promise(resolve => setTimeout(resolve, waitTime));
+    }
+    
     await twitterClient.v2.retweet(BOT_USER_ID, tweetId);
+    lastRetweetTime = Date.now();
     console.log(`🔄 Retweeted: ${tweetId}`);
   } catch (e) {
-    console.error('retweet error:', e?.message || e);
+    if (e?.code === 429) {
+      console.log(`⏳ Retweet rate limited! Will skip retweets for 5 minutes...`);
+      // Set a longer cooldown to avoid repeated 429s
+      lastRetweetTime = Date.now() + 300000; // 5 minutes
+    } else {
+      console.error('retweet error:', e?.message || e);
+    }
   }
 }
 
