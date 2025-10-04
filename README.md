@@ -93,6 +93,9 @@ ALLOWED_USERS=username1,username2,username3  # Comma-separated list (without @)
 # Time-based filtering (optional)
 MENTION_MAX_AGE_HOURS=24  # Only process mentions from last 24 hours
 
+# Retweet behavior (optional)
+ENABLE_RETWEETS=true  # Set to false to disable retweets (saves posts for rate limits)
+
 # Monthly rate limit handling (optional)
 MONTHLY_RESET_DAY=25  # Day of month when monthly limits reset (1-31)
 MONTHLY_RESET_HOUR_UTC=0  # Hour in UTC when monthly limits reset (0-23)
@@ -288,7 +291,7 @@ The codebase uses a clean, modular architecture with shared utilities:
 - ✅ **Time-based Filtering** - Configurable time window for processing mentions (default: 24h)
 - ✅ **Persistent Storage** - Remembers processed mentions across restarts via JSON file
 - ✅ **Natural Response Timing** - 1-minute delay before replying to feel more human
-- ✅ **Content Promotion** - Automatically retweets success messages to promote archived content
+- ✅ **Content Promotion** - Automatically retweets success messages to promote archived content (configurable via ENABLE_RETWEETS)
 - ✅ **Error Handling** - Graceful error handling with user feedback
 - ✅ **Taken Undername Detection** - Handles already-taken undernames gracefully
 - ✅ **Multi-line Mention Support** - Handles mentions that span multiple lines

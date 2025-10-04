@@ -39,6 +39,7 @@ const RATE_LIMIT_BACKOFF_MS = 960000; // 16 minutes for Twitter free plan (with 
 // Retweet rate limiting
 let lastRetweetTime = 0;
 const RETWEET_COOLDOWN_MS = 60000; // 1 minute between retweets (more conservative)
+const ENABLE_RETWEETS = String(process.env.ENABLE_RETWEETS || 'true').toLowerCase() !== 'false';
 
 // Bot user ID (known from previous runs)
 const BOT_USER_ID = '1971034918240256000';
@@ -242,9 +243,11 @@ async function handleMention(twitterClient, mention, includes) {
     const replyTweetId = await handleSuccess(twitterClient, mention.id, undername, OWNER_ARNS_NAME, txId, isUploadedMedia);
     
     // Retweet the success message to promote the archived content
-    if (replyTweetId) {
+    if (replyTweetId && ENABLE_RETWEETS) {
       console.log('🔄 Retweeting success message...');
       await retweet(twitterClient, replyTweetId, BOT_USER_ID);
+    } else if (replyTweetId && !ENABLE_RETWEETS) {
+      console.log('📝 Retweets disabled via ENABLE_RETWEETS=false');
     }
   } catch (err) {
     console.error('handleMention error:', err?.message || err);
