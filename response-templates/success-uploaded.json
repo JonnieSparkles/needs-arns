@@ -1,0 +1,18 @@
+{
+  "type": "success-uploaded",
+  "description": "Success message when media is uploaded and named",
+  "template": [
+    "🎉 Success! Your content is now permanently stored on Arweave!",
+    "",
+    "📸 Media uploaded & named: {undername}",
+    "",
+    "🌐 https://{undername}_{ownerArnsName}.ar.io",
+    "🔗 ar://{undername}_{ownerArnsName}",
+    "📋 {txId}",
+    "",
+    "✨ Powered by @ArNSdomains"
+  ],
+  "variables": ["undername", "ownerArnsName", "txId"],
+  "maxLength": 280,
+  "fallback": "success-uploaded-truncated"
+}

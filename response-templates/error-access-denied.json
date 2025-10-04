@@ -1,0 +1,14 @@
+{
+  "type": "error-access-denied",
+  "description": "Error when user is not in allowed users list",
+  "template": [
+    "👋 Thanks for your interest!",
+    "🚧 ArNS assignment is currently in private beta.",
+    "",
+    "Stay tuned for updates! 🔔",
+    "",
+    "Powered by @ArNSdomains"
+  ],
+  "variables": [],
+  "maxLength": 280
+}

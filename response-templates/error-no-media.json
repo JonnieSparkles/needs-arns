@@ -1,0 +1,9 @@
+{
+  "type": "error-no-media",
+  "description": "Error when no accessible media URLs found",
+  "template": [
+    "❌ Could not access media in the parent tweet. Please try again."
+  ],
+  "variables": [],
+  "maxLength": 280
+}

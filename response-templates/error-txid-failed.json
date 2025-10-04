@@ -1,0 +1,9 @@
+{
+  "type": "error-txid-failed",
+  "description": "Error when Arweave TXID doesn't resolve",
+  "template": [
+    "❌ That Arweave TXID didn't resolve: {txId}"
+  ],
+  "variables": ["txId"],
+  "maxLength": 280
+}

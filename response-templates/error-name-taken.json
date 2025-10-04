@@ -1,0 +1,9 @@
+{
+  "type": "error-name-taken",
+  "description": "Error when undername is already taken",
+  "template": [
+    "❌ Undername '{undername}' is already taken. Try a different name."
+  ],
+  "variables": ["undername"],
+  "maxLength": 280
+}

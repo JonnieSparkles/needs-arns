@@ -1,16 +1,19 @@
 import 'dotenv/config';
 import { TwitterApi } from 'twitter-api-v2';
 import { ANT, ArweaveSigner, AOProcess } from '@ar.io/sdk';
-import { TurboFactory, ArweaveSigner as TurboArweaveSigner } from '@ardrive/turbo-sdk';
 import express from 'express';
 import fs from 'fs';
+import { requireEnv, getJwkFromEnv, isValidUndername, isInfrastructureErrorType, verifyTxIdExists, ARWEAVE_TXID_RE, ASSIGN_CMD_RE } from './lib/utils.js';
+import { uploadToArweave, downloadMedia, getTurboClient } from './lib/arweave.js';
+import { updateArchive } from './lib/archive.js';
+import { reply, retweet, getTwitterClient } from './lib/twitter.js';
+import { checkUndernameAvailability, createUndernameRecord } from './lib/arns.js';
+import { hasMediaAttachments, extractTxIdFromTweetData, getMediaUrls, processMediaFromTweet } from './lib/media.js';
+import { fetchParentTweet, fetchParentUser, isUserAllowed, extractCommandFromMention, handleHelpCommand, handleAccessDenied, handleNameTaken, handleTxIdFailed, handleNoMedia, handleUploadFailed, handleNoContent, handleGeneralError, handleSuccess } from './lib/mentions.js';
+import { saveProcessedState, loadProcessedState } from './lib/state.js';
+import { renderTemplate } from './response-templates/loader.js';
 
 // ---------- config & env ----------
-function requireEnv(name) {
-  const v = process.env[name];
-  if (!v || !String(v).trim()) throw new Error(`Missing env: ${name}`);
-  return v;
-}
 
 const {
   TWITTER_APP_KEY,
@@ -53,60 +56,11 @@ console.log(`⏰ Time filter: ${MENTION_MAX_AGE_HOURS}h max age`);
 const DATA_DIR = process.env.RAILWAY_VOLUME_MOUNT_PATH || '.';
 const PROCESSED_MENTIONS_FILE = `${DATA_DIR}/processed_mentions.json`;
 
-function saveProcessedState(processedMentions, sinceId, processedDetails = {}) {
-  try {
-    const state = {
-      processedMentions: Array.from(processedMentions),
-      processedDetails: processedDetails, // { mentionId: { undername, txId, success, timestamp, username } }
-      lastSinceId: sinceId,
-      lastUpdated: new Date().toISOString(),
-      version: '1.1'
-    };
-    fs.writeFileSync(PROCESSED_MENTIONS_FILE, JSON.stringify(state, null, 2));
-    console.log(`💾 Saved: ${state.processedMentions.length} mentions, since_id: ${sinceId || 'none'}`);
-  } catch (err) {
-    console.error('❌ Failed to save processed state:', err.message);
-  }
-}
-
-function loadProcessedState() {
-  try {
-    if (!fs.existsSync(PROCESSED_MENTIONS_FILE)) {
-      console.log('📂 Starting fresh');
-      return { processedMentions: new Set(), sinceId: undefined, processedDetails: {} };
-    }
-    
-    const data = fs.readFileSync(PROCESSED_MENTIONS_FILE, 'utf8');
-    const state = JSON.parse(data);
-    
-    const processedMentions = new Set(state.processedMentions || []);
-    const sinceId = state.lastSinceId;
-    const processedDetails = state.processedDetails || {};
-    
-    console.log(`📂 Loaded: ${processedMentions.size} mentions, since_id: ${sinceId || 'none'}`);
-    
-    return { processedMentions, sinceId, processedDetails };
-  } catch (err) {
-    console.error('❌ Failed to load processed state:', err.message);
-    console.log('📂 Starting fresh');
-    return { processedMentions: new Set(), sinceId: undefined, processedDetails: {} };
-  }
-}
 
 // ---------- wallet ----------
-function getJwkFromEnv() {
-  if (process.env.ARWEAVE_JWK_JSON) {
-    return JSON.parse(process.env.ARWEAVE_JWK_JSON);
-  }
-  if (process.env.ARWEAVE_JWK_B64) {
-    const json = Buffer.from(process.env.ARWEAVE_JWK_B64, 'base64').toString('utf8');
-    return JSON.parse(json);
-  }
-  throw new Error('Provide ARWEAVE_JWK_JSON or ARWEAVE_JWK_B64');
-}
 
 // ---------- clients ----------
-const twitter = new TwitterApi({
+const twitter = getTwitterClient({
   appKey: TWITTER_APP_KEY,
   appSecret: TWITTER_APP_SECRET,
   accessToken: TWITTER_ACCESS_TOKEN,
@@ -120,374 +74,15 @@ const ant = ANT.init({
 });
 
 // Initialize Turbo client for Arweave uploads
-const turbo = TurboFactory.authenticated({ 
-  signer: new TurboArweaveSigner(jwk) 
-});
+const turbo = getTurboClient(jwk);
 
 // Wallet address is set in .env file
 
 // ---------- helpers ----------
-const ARWEAVE_TXID_RE = /https?:\/\/[^\s\/]+\/([A-Za-z0-9_-]{43})(?:\b|\/|\?|#)/;
-const ASSIGN_CMD_RE = /\bassign\s+([a-z0-9_-]{1,63})\b/i;
-
-function fetchParentTweet(includes, mention) {
-  const replied = mention?.referenced_tweets?.find(t => t.type === 'replied_to');
-  if (!replied) return null;
-  // Find the parent tweet in the includes data (no API call needed!)
-  const parent = includes?.tweets?.find(t => t.id === replied.id);
-  return parent || null;
-}
-
-function fetchParentUser(includes, parentTweet) {
-  if (!parentTweet?.author_id) return null;
-  // Find the parent user in the includes data
-  const parentUser = includes?.users?.find(u => u.id === parentTweet.author_id);
-  return parentUser || null;
-}
-
-function extractTxIdFromTweetData(tweetData) {
-  const text = tweetData?.text ?? '';
-  const urls = tweetData?.entities?.urls ?? [];
-  const expanded = urls.map(u => u.expanded_url || u.url).join(' ');
-  const haystack = `${text}\n${expanded}`;
-  const m = haystack.match(ARWEAVE_TXID_RE);
-  return m ? m[1] : null;
-}
-
-function hasMediaAttachments(tweetData) {
-  return tweetData.attachments?.media_keys?.length > 0;
-}
-
-async function getMediaUrls(tweetData, includes) {
-  if (!hasMediaAttachments(tweetData)) return [];
-  
-  const mediaKeys = tweetData.attachments.media_keys;
-  const mediaObjects = includes?.media || [];
-  
-  // Process each media item asynchronously
-  const results = await Promise.all(mediaKeys.map(async (key) => {
-    const mediaObj = mediaObjects.find(m => m.media_key === key);
-    if (!mediaObj) {
-      return null;
-    }
-    
-    console.log(`🔍 Processing media: type=${mediaObj.type}, hasUrl=${!!mediaObj.url}, hasPreview=${!!mediaObj.preview_image_url}, hasVariants=${!!mediaObj.variants}`);
-    
-    // For videos and animated GIFs, try to get the highest quality variant
-    let bestUrl = mediaObj.url || mediaObj.preview_image_url;
-    
-    if (mediaObj.type === 'video' && mediaObj.variants) {
-      // Find the highest bitrate video variant
-      const videoVariants = mediaObj.variants.filter(v => v.content_type?.startsWith('video/'));
-      if (videoVariants.length > 0) {
-        const bestVariant = videoVariants.reduce((best, current) => {
-          const currentBitrate = current.bit_rate || 0;
-          const bestBitrate = best.bit_rate || 0;
-          return currentBitrate > bestBitrate ? current : best;
-        });
-        bestUrl = bestVariant.url;
-        console.log(`📹 Selected video variant: ${bestVariant.content_type}, bitrate: ${bestVariant.bit_rate}`);
-      }
-    }
-    
-    // For animated GIFs, try to get the original URL if available
-    // Twitter sometimes serves animated GIFs as 'photo' type but with a direct URL
-    if (mediaObj.type === 'photo' && mediaObj.url && !mediaObj.url.includes('pbs.twimg.com/media/')) {
-      // This might be a direct link to an animated GIF
-      console.log(`🖼️ Photo with direct URL: ${mediaObj.url}`);
-    }
-    
-    // Handle Twitter video thumbnails - try to get the actual GIF/MP4
-    if (bestUrl && bestUrl.includes('tweet_video_thumb')) {
-      console.log(`🎬 Detected video thumbnail, attempting to get original...`);
-      
-      // Extract the media ID from the thumbnail URL
-      // Format: https://pbs.twimg.com/tweet_video_thumb/MEDIA_ID.jpg
-      const thumbMatch = bestUrl.match(/tweet_video_thumb\/([^\/]+)\.jpg/);
-      if (thumbMatch) {
-        const mediaId = thumbMatch[1];
-        
-        // Try different possible URLs for the original media
-        const possibleUrls = [
-          `https://video.twimg.com/tweet_video/${mediaId}.mp4`,
-          `https://pbs.twimg.com/tweet_video/${mediaId}.mp4`,
-          `https://video.twimg.com/tweet_video/${mediaId}.gif`,
-          `https://pbs.twimg.com/tweet_video/${mediaId}.gif`,
-          `https://pbs.twimg.com/media/${mediaId}.mp4`,
-          `https://pbs.twimg.com/media/${mediaId}.gif`
-        ];
-        
-        console.log(`🔍 Trying to find original media for ID: ${mediaId}`);
-        
-        let foundOriginal = false;
-        // Try each URL to see which one works
-        for (const testUrl of possibleUrls) {
-          try {
-            const testResponse = await fetch(testUrl, { method: 'HEAD' });
-            if (testResponse.ok) {
-              console.log(`✅ Found original media: ${testUrl}`);
-              bestUrl = testUrl;
-              foundOriginal = true;
-              break;
-            }
-          } catch (e) {
-            // Continue to next URL
-          }
-        }
-        
-        // If we couldn't find the original, return null (no media)
-        if (!foundOriginal) {
-          console.log(`❌ Could not find original media for animated GIF, skipping...`);
-          return null;
-        }
-      }
-    }
-    
-    console.log(`✅ Final media URL: ${bestUrl}`);
-    
-    // Return the best URL available
-    return {
-      url: bestUrl,
-      type: mediaObj.type,
-      width: mediaObj.width,
-      height: mediaObj.height,
-      media_key: key
-    };
-  }));
-  
-  return results.filter(Boolean);
-}
-
-async function downloadMedia(mediaUrl) {
-  try {
-    console.log(`📥 Downloading: ${mediaUrl.split('/').pop()}`);
-    const response = await fetch(mediaUrl);
-    
-    if (!response.ok) {
-      throw new Error(`Failed to download media: ${response.status} ${response.statusText}`);
-    }
-    
-    const buffer = await response.arrayBuffer();
-    console.log(`✅ Downloaded ${(buffer.byteLength / 1024).toFixed(1)}KB`);
-    return Buffer.from(buffer);
-  } catch (error) {
-    console.error(`❌ Media download failed:`, error);
-    throw error;
-  }
-}
-
-async function uploadToArweave(mediaBuffer, contentType = 'application/octet-stream') {
-  try {
-    console.log(`☁️ Uploading ${(mediaBuffer.length / 1024).toFixed(1)}KB to Arweave...`);
-    
-    // Check Turbo balance first
-    const balance = await turbo.getBalance();
-    
-    // Upload file
-    const uploadResult = await turbo.uploadFile({
-      fileStreamFactory: () => Buffer.from(mediaBuffer),
-      fileSizeFactory: () => mediaBuffer.length,
-      dataItemOpts: {
-        tags: [
-          { name: 'Content-Type', value: contentType },
-          { name: 'App-Name', value: 'NeedsArNS-Bot' },
-          { name: 'App-Version', value: '1.0.0' }
-        ]
-      }
-    });
-    
-    console.log(`✅ Uploaded: ${uploadResult.id} (${uploadResult.winc} winc)`);
-    
-    return uploadResult.id;
-  } catch (error) {
-    console.error(`❌ Arweave upload failed:`, error);
-    throw error;
-  }
-}
-
-async function updateArchive(mentionDetails) {
-  try {
-    console.log('📚 Updating archive...');
-    let archive = { 
-      metadata: { 
-        lastUpdated: '', 
-        totalRecords: 0, 
-        version: '1.0', 
-        description: 'NeedsArNS Bot Archive - All successfully archived content' 
-      }, 
-      records: [] 
-    };
-    
-    if (fs.existsSync('archive.json')) {
-      const archiveData = fs.readFileSync('archive.json', 'utf8');
-      archive = JSON.parse(archiveData);
-    }
-    
-    const newRecord = {
-      undername: mentionDetails.undername,
-      txId: mentionDetails.txId,
-      username: mentionDetails.username,
-      timestamp: mentionDetails.timestamp,
-      isUploadedMedia: mentionDetails.isUploadedMedia || false
-    };
-    
-    const existingIndex = archive.records.findIndex(r => r.undername === mentionDetails.undername);
-    if (existingIndex >= 0) {
-      archive.records[existingIndex] = newRecord;
-      console.log(`📝 Updated: ${mentionDetails.undername}`);
-    } else {
-      archive.records.push(newRecord);
-      console.log(`➕ Added: ${mentionDetails.undername}`);
-    }
-    
-    archive.metadata.lastUpdated = new Date().toISOString();
-    archive.metadata.totalRecords = archive.records.length;
-    
-    fs.writeFileSync('archive.json', JSON.stringify(archive, null, 2));
-    console.log(`💾 Archive saved: ${archive.metadata.totalRecords} records`);
-    
-    // Upload archive to Arweave and assign archive undername
-    const archiveContent = JSON.stringify(archive, null, 2);
-    const archiveTxId = await uploadToArweave(archiveContent, 'application/json');
-    console.log(`📤 Archive uploaded: ${archiveTxId}`);
-    
-    const archiveArnsResult = await ant.setUndernameRecord({
-      undername: 'archive',
-      transactionId: archiveTxId,
-      ttlSeconds: DEFAULT_TTL_SECONDS
-    });
-    console.log(`✅ Archive assigned: archive_${OWNER_ARNS_NAME}.ar.io`);
-    
-  } catch (error) {
-    console.error('❌ Error updating archive:', error);
-  }
-}
-
-function isUserAllowed(mention, includes) {
-  // If no access control is configured, allow all users
-  if (ALLOWED_USERS.length === 0) {
-    return true;
-  }
-  
-  // Find the author info from the includes.users data
-  const authorId = mention.author_id;
-  const author = includes?.users?.find(u => u.id === authorId);
-  
-  if (!author || !author.username) {
-    console.log(`⚠️ Could not determine username for mention ${mention.id}`);
-    return false; // Deny if we can't identify the user
-  }
-  
-  const username = author.username.toLowerCase();
-  const isAllowed = ALLOWED_USERS.includes(username);
-  
-  console.log(`🔐 Access check: @${username} ${isAllowed ? '✅ ALLOWED' : '❌ DENIED'}`);
-  return isAllowed;
-}
-
-function extractCommandFromMention(mentionText) {
-  // Replace line breaks with spaces to handle multi-line mentions
-  const normalizedText = mentionText.replace(/\s+/g, ' ').trim();
-  
-  // Check if this is a valid command format: contains @NeedsArNS anywhere (handles Twitter auto-mentions)
-  const containsBot = /@NeedsArNS\b/i.test(normalizedText);
-  if (!containsBot) {
-    console.log(`🚫 Not a bot command: "${normalizedText}"`);
-    return null; // Not a command to our bot
-  }
-  
-  // Check for help command
-  if (/\bhelp\b/i.test(normalizedText)) {
-    console.log(`✅ Help command detected`);
-    return { type: 'help' };
-  }
-  
-  const m = normalizedText.match(ASSIGN_CMD_RE);
-  if (!m) return null;
-  
-  const undername = m[1].toLowerCase();
-  
-  // Validate undername according to ArNS rules (after converting to lowercase)
-  if (!isValidUndername(undername)) {
-    return null;
-  }
-  
-  return { type: 'assign', undername };
-}
-
-function isValidUndername(undername) {
-  // 1. Valid characters: 0-9, a-z, dashes, underscores (lowercase only)
-  if (!/^[a-z0-9_-]+$/.test(undername)) {
-    return false;
-  }
-  
-  // 2. Dashes and underscores cannot be leading or trailing
-  if (undername.startsWith('-') || undername.startsWith('_') || 
-      undername.endsWith('-') || undername.endsWith('_')) {
-    return false;
-  }
-  
-  // 3. Dashes and underscores cannot be used in single character domains
-  if (undername.length === 1 && (undername.includes('-') || undername.includes('_'))) {
-    return false;
-  }
-  
-  // 4. 1 character minimum, 51 characters maximum
-  if (undername.length < 1 || undername.length > 51) {
-    return false;
-  }
-  
-  return true;
-}
-
-async function reply(twitterClient, inReplyTo, body) {
-  try {
-    const replyResult = await twitterClient.v2.reply(body, inReplyTo);
-    return replyResult.data?.id; // Return the reply tweet ID
-  } catch (e) {
-    console.error('reply error:', e?.message || e);
-    return null;
-  }
-}
-
-async function retweet(twitterClient, tweetId) {
-  try {
-    // Check if we need to wait due to rate limiting
-    const now = Date.now();
-    const timeSinceLastRetweet = now - lastRetweetTime;
-    
-    if (timeSinceLastRetweet < RETWEET_COOLDOWN_MS) {
-      const waitTime = RETWEET_COOLDOWN_MS - timeSinceLastRetweet;
-      console.log(`⏳ Waiting ${Math.ceil(waitTime/1000)}s before retweet to avoid rate limits...`);
-      await new Promise(resolve => setTimeout(resolve, waitTime));
-    }
-    
-    await twitterClient.v2.retweet(BOT_USER_ID, tweetId);
-    lastRetweetTime = Date.now();
-    console.log(`🔄 Retweeted: ${tweetId}`);
-  } catch (e) {
-    if (e?.code === 429) {
-      console.log(`⏳ Retweet rate limited! Will skip retweets for 5 minutes...`);
-      // Set a longer cooldown to avoid repeated 429s
-      lastRetweetTime = Date.now() + 300000; // 5 minutes
-    } else {
-      console.error('retweet error:', e?.message || e);
-    }
-  }
-}
 
 
 
-async function verifyTxIdExists(txid) {
-  // lightweight check via a HEAD request to a public gateway (optional)
-  // To keep deps minimal we use fetch; Node 18+ has global fetch.
-  try {
-    const res = await fetch(`https://arweave.net/${txid}`, { method: 'HEAD' });
-    return res.ok;
-  } catch {
-    return false; // network hiccup → don’t hard fail; you can choose to skip this.
-  }
-}
+
 
 // ---------- core handler ----------
 async function handleMention(twitterClient, mention, includes) {
@@ -507,19 +102,7 @@ async function handleMention(twitterClient, mention, includes) {
     
     // Handle help command
     if (command.type === 'help') {
-      const helpMsg = [
-        `🤖 @NeedsArNS Bot Commands:`,
-        ``,
-        `📸 @NeedsArNS assign <name> (reply to media)`,
-        `🔗 @NeedsArNS assign <name> (reply to Arweave link)`,
-        ``,
-        `🎨 View Gallery: needsarns.ar.io`,
-        `💳 Credit sharing: Coming soon!`,
-        ``,
-        `Powered by @ArNSdomains`
-      ].join('\n');
-      
-      await reply(twitterClient, mention.id, helpMsg);
+      await handleHelpCommand(twitterClient, mention.id);
       return;
     }
     
@@ -527,31 +110,26 @@ async function handleMention(twitterClient, mention, includes) {
     console.log(`🏷️ Undername: ${undername}`);
     
     // Check if undername already exists BEFORE processing media
-    try {
-      const existingRecords = await ant.getRecords();
-      if (existingRecords && existingRecords[undername]) {
-        console.log(`❌ Name taken: ${undername}`);
-        
-        // Record failed assignment (name taken)
-        processedDetails[mention.id] = {
-          username: username,
-          undername: undername,
-          success: false,
-          reason: 'undername_taken',
-          timestamp: new Date().toISOString()
-        };
-        
-        await reply(twitterClient, mention.id, `❌ Undername '${undername}' is already taken. Try a different name.`);
-        return;
-      }
-        console.log(`✅ Name available: ${undername}`);
-    } catch (checkError) {
-      console.error(`❌ Error checking undername availability:`, checkError);
-      // Continue anyway - better to try and fail than to block on API issues
+    const availability = await checkUndernameAvailability(ant, undername);
+    if (!availability.available) {
+      console.log(`❌ Name taken: ${undername}`);
+      
+      // Record failed assignment (name taken)
+      processedDetails[mention.id] = {
+        username: username,
+        undername: undername,
+        success: false,
+        reason: 'undername_taken',
+        timestamp: new Date().toISOString()
+      };
+      
+      await handleNameTaken(twitterClient, mention.id, undername);
+      return;
     }
+    console.log(`✅ Name available: ${undername}`);
     
     // Check access control
-    if (!isUserAllowed(mention, includes)) {
+    if (!isUserAllowed(mention, includes, ALLOWED_USERS)) {
       // Record denied access attempt
       processedDetails[mention.id] = {
         username: username,
@@ -560,16 +138,7 @@ async function handleMention(twitterClient, mention, includes) {
         timestamp: new Date().toISOString()
       };
       
-      const denialMsg = [
-        `👋 Thanks for your interest!`,
-        `🚧 ArNS assignment is currently in private beta.`,
-        ``,
-        `Stay tuned for updates! 🔔`,
-        ``,
-        `Powered by @ArNSdomains`
-      ].join('\n');
-      
-      await reply(twitterClient, mention.id, denialMsg);
+      await handleAccessDenied(twitterClient, mention.id, username);
       return;
     }
     
@@ -590,10 +159,10 @@ async function handleMention(twitterClient, mention, includes) {
       console.log(`🔗 Found TXID: ${txId}`);
       
       // Verify existing TXID
-    const ok = await verifyTxIdExists(txId);
-    if (!ok) {
+      const ok = await verifyTxIdExists(txId);
+      if (!ok) {
         console.log(`❌ TXID verification failed: ${txId}`);
-      await reply(twitterClient, mention.id, `❌ That Arweave TXID didn't resolve: ${txId}`);
+        await handleTxIdFailed(twitterClient, mention.id, txId);
         return;
       }
       console.log(`✅ TXID verified: ${txId}`);
@@ -601,79 +170,34 @@ async function handleMention(twitterClient, mention, includes) {
     } else if (hasMediaAttachments(parent)) {
       // Fallback: Handle media upload flow
       console.log(`📱 No Arweave link found, checking for media attachments`);
-      const mediaUrls = await getMediaUrls(parent, includes);
       
-      if (mediaUrls.length === 0) {
-        console.log(`❌ No accessible media URLs found in parent tweet ${parent.id}`);
-        await reply(twitterClient, mention.id, `❌ Could not access media in the parent tweet. Please try again.`);
+      const mediaResult = await processMediaFromTweet(parent, includes, (buffer, contentType) => 
+        uploadToArweave(buffer, contentType, 'NeedsArNS-Bot', jwk)
+      );
+      
+      if (!mediaResult.success) {
+        if (mediaResult.error === 'no_media') {
+          await handleNoMedia(twitterClient, mention.id);
+        } else if (mediaResult.error === 'upload_failed') {
+          await handleUploadFailed(twitterClient, mention.id, mediaResult.message);
+        }
         return;
       }
       
-      // Use the first media attachment
-      const media = mediaUrls[0];
-      console.log(`📸 Processing ${media.type} media: ${media.url}`);
-      
-      try {
-        // Download and upload media
-        const mediaBuffer = await downloadMedia(media.url);
-        const contentType = media.type === 'photo' ? 'image/jpeg' : 
-                           media.type === 'video' || media.type === 'animated_gif' ? 'video/mp4' : 
-                           'application/octet-stream';
-        
-        txId = await uploadToArweave(mediaBuffer, contentType);
-        isUploadedMedia = true;
-        console.log(`✅ Media uploaded to Arweave: ${txId}`);
-        
-      } catch (uploadError) {
-        console.error(`❌ Failed to upload media:`, uploadError);
-        await reply(twitterClient, mention.id, `❌ Failed to upload media to Arweave: ${uploadError.message}`);
-        return;
-      }
+      txId = mediaResult.txId;
+      isUploadedMedia = mediaResult.isUploadedMedia;
       
     } else {
       // No Arweave link AND no media found
       console.log(`❌ No Arweave TXID or media found in parent tweet ${parent.id}`);
-      await reply(twitterClient, mention.id, `❌ Parent tweet must contain either an Arweave link or media attachment.`);
+      await handleNoContent(twitterClient, mention.id);
       return;
     }
 
-    // Undername availability already checked earlier
-
-    // Write undername -> txid on your ArNS name
-    console.log(`📝 Creating ArNS record: ${undername} → ${txId}`);
-    let onchainId;
-    try {
-      console.log(`🔍 Using TTL: ${DEFAULT_TTL_SECONDS} seconds`);
-      const result = await ant.setUndernameRecord({
-        undername: undername,
-        transactionId: txId,
-        ttlSeconds: DEFAULT_TTL_SECONDS
-      });
-      onchainId = result.id;
-      console.log(`✅ ArNS record created: ${onchainId}`);
-      
-      // Record successful assignment
-      processedDetails[mention.id] = {
-        username: username,
-        undername: undername,
-        txId: txId,
-        onchainId: onchainId,
-        isUploadedMedia: isUploadedMedia,
-        success: true,
-        timestamp: new Date().toISOString()
-      };
-      
-      // Update archive with new record
-      await updateArchive({
-        username: username,
-        undername: undername,
-        txId: txId,
-        isUploadedMedia: isUploadedMedia,
-        timestamp: new Date().toISOString()
-      });
-      
-    } catch (recordError) {
-      if (recordError.message?.includes('already exists') || recordError.message?.includes('taken')) {
+    // Create ArNS record
+    const recordResult = await createUndernameRecord(ant, undername, txId, DEFAULT_TTL_SECONDS);
+    if (!recordResult.success) {
+      if (recordResult.error === 'undername_taken') {
         console.log(`❌ Undername '${undername}' is already taken`);
         
         // Record failed assignment (name taken)
@@ -686,70 +210,47 @@ async function handleMention(twitterClient, mention, includes) {
           timestamp: new Date().toISOString()
         };
         
-        await reply(twitterClient, mention.id, `❌ Undername '${undername}' is already taken. Try a different name.`);
+        await handleNameTaken(twitterClient, mention.id, undername);
         return;
       }
-      throw recordError; // Re-throw if it's a different error
+      throw new Error(recordResult.message);
     }
-
-    const msg = [
-      isUploadedMedia ? `🎉 Success! Your content is now permanently stored on Arweave!` : `🎉 Success! Your content is now permanently named!`,
-      ``,
-      isUploadedMedia ? `📸 Media uploaded & named: ${undername}` : `🔗 Link assigned: ${undername}`,
-      ``,
-      `🌐 https://${undername}_${OWNER_ARNS_NAME}.ar.io`,
-      `🔗 ar://${undername}_${OWNER_ARNS_NAME}`,
-      `📋 ${txId}`,
-      ``,
-      `✨ Powered by @ArNSdomains`
-    ].join('\n');
     
-    // Check Twitter character limit (280 characters)
-    if (msg.length > 280) {
-      console.log(`⚠️ Message too long (${msg.length} chars), truncating...`);
-      const truncatedMsg = [
-        isUploadedMedia ? `🎉 Media uploaded & named: ${undername}` : `🎉 Link assigned: ${undername}`,
-        ``,
-        `🌐 https://${undername}_${OWNER_ARNS_NAME}.ar.io`,
-        `📋 ${txId}`,
-        ``,
-        `✨ Powered by @ArNSdomains`
-      ].join('\n');
-      
-      if (truncatedMsg.length > 280) {
-        // If still too long, use minimal message
-        const minimalMsg = `🎉 ${undername}_${OWNER_ARNS_NAME}.ar.io → ${txId}`;
-        console.log(`⚠️ Using minimal message (${minimalMsg.length} chars)`);
-        const replyTweetId = await reply(twitterClient, mention.id, minimalMsg);
-        if (replyTweetId) {
-          console.log('🔄 Retweeting success message...');
-          await retweet(twitterClient, replyTweetId);
-        }
-        return;
-      }
-      
-      console.log(`✅ Using truncated message (${truncatedMsg.length} chars)`);
-      const replyTweetId = await reply(twitterClient, mention.id, truncatedMsg);
-      if (replyTweetId) {
-        console.log('🔄 Retweeting success message...');
-        await retweet(twitterClient, replyTweetId);
-      }
-      return;
-    }
+    const onchainId = recordResult.recordId;
+    
+    // Record successful assignment
+    processedDetails[mention.id] = {
+      username: username,
+      undername: undername,
+      txId: txId,
+      onchainId: onchainId,
+      isUploadedMedia: isUploadedMedia,
+      success: true,
+      timestamp: new Date().toISOString()
+    };
+    
+    // Update archive with new record
+    await updateArchive({
+      username: username,
+      undername: undername,
+      txId: txId,
+      isUploadedMedia: isUploadedMedia,
+      timestamp: new Date().toISOString()
+    }, true, ant, OWNER_ARNS_NAME, DEFAULT_TTL_SECONDS, jwk);
 
-    // Wait 1 minute before replying to make it feel more natural
-    console.log('⏳ Waiting 1 minute before replying...');
-    await new Promise(resolve => setTimeout(resolve, 60000));
-
-    const replyTweetId = await reply(twitterClient, mention.id, msg);
+    // Send success reply
+    const replyTweetId = await handleSuccess(twitterClient, mention.id, undername, OWNER_ARNS_NAME, txId, isUploadedMedia);
     
     // Retweet the success message to promote the archived content
     if (replyTweetId) {
       console.log('🔄 Retweeting success message...');
-      await retweet(twitterClient, replyTweetId);
+      await retweet(twitterClient, replyTweetId, BOT_USER_ID);
     }
   } catch (err) {
     console.error('handleMention error:', err?.message || err);
+    
+    // Categorize error type
+    const isInfrastructureError = isInfrastructureErrorType(err);
     
     // Record failed assignment (error)
     processedDetails[mention.id] = {
@@ -757,10 +258,16 @@ async function handleMention(twitterClient, mention, includes) {
       success: false,
       reason: 'error',
       error: err?.message || 'unknown error',
-      timestamp: new Date().toISOString()
+      timestamp: new Date().toISOString(),
+      isInfrastructureError: isInfrastructureError
     };
     
-    await reply(twitterClient, mention.id, `❌ Failed: ${err?.message ?? 'unknown error'}`);
+    // Only reply to user-related errors, not infrastructure issues
+    if (!isInfrastructureError) {
+      await handleGeneralError(twitterClient, mention.id, err?.message ?? 'unknown error');
+    } else {
+      console.log(`🔧 Infrastructure error - skipping reply to user`);
+    }
   }
 }
 
@@ -769,7 +276,7 @@ let isProcessing = false;
 let isPolling = false;
 
 // Load persistent state on startup
-const { processedMentions, sinceId: initialSinceId, processedDetails } = loadProcessedState();
+const { processedMentions, sinceId: initialSinceId, processedDetails } = loadProcessedState(PROCESSED_MENTIONS_FILE);
 
 async function processMentionQueue(twitterClient, mention, includes) {
   // Wait if another mention is being processed
@@ -857,7 +364,7 @@ async function pollMentionsForever() {
           isFirstPoll = false;
           
           // Save updated since_id immediately
-          saveProcessedState(processedMentions, sinceId, processedDetails);
+          saveProcessedState(processedMentions, sinceId, processedDetails, PROCESSED_MENTIONS_FILE);
           
           // Queue mentions for processing (oldest -> newest)
           const newMentions = recentMentions.reverse().filter(m => !processedMentions.has(m.id));
@@ -868,7 +375,7 @@ async function pollMentionsForever() {
               processedMentions.add(m.id);
               await processMentionQueue(twitter, m, includes);
             // Save state after each processed mention
-            saveProcessedState(processedMentions, sinceId, processedDetails);
+            saveProcessedState(processedMentions, sinceId, processedDetails, PROCESSED_MENTIONS_FILE);
             }
           }
         } else {

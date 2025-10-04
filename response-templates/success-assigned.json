@@ -1,0 +1,18 @@
+{
+  "type": "success-assigned",
+  "description": "Success message when existing link is assigned",
+  "template": [
+    "🎉 Success! Your content is now permanently named!",
+    "",
+    "🔗 Link assigned: {undername}",
+    "",
+    "🌐 https://{undername}_{ownerArnsName}.ar.io",
+    "🔗 ar://{undername}_{ownerArnsName}",
+    "📋 {txId}",
+    "",
+    "✨ Powered by @ArNSdomains"
+  ],
+  "variables": ["undername", "ownerArnsName", "txId"],
+  "maxLength": 280,
+  "fallback": "success-assigned-truncated"
+}

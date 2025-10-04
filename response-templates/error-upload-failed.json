@@ -1,0 +1,9 @@
+{
+  "type": "error-upload-failed",
+  "description": "Error when media upload to Arweave fails",
+  "template": [
+    "❌ Failed to upload media to Arweave: {errorMessage}"
+  ],
+  "variables": ["errorMessage"],
+  "maxLength": 280
+}

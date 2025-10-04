@@ -1,0 +1,17 @@
+{
+  "type": "help",
+  "description": "Help command response",
+  "template": [
+    "🤖 @NeedsArNS Bot Commands:",
+    "",
+    "📸 @NeedsArNS assign <name> (reply to media)",
+    "🔗 @NeedsArNS assign <name> (reply to Arweave link)",
+    "",
+    "🎨 View Gallery: needsarns.ar.io",
+    "💳 Credit sharing: Coming soon!",
+    "",
+    "Powered by @ArNSdomains"
+  ],
+  "variables": [],
+  "maxLength": 280
+}

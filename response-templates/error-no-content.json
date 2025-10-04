@@ -1,0 +1,9 @@
+{
+  "type": "error-no-content",
+  "description": "Error when no Arweave link or media found in parent tweet",
+  "template": [
+    "❌ Parent tweet must contain either an Arweave link or media attachment."
+  ],
+  "variables": [],
+  "maxLength": 280
+}

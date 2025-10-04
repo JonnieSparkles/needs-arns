@@ -1,0 +1,15 @@
+{
+  "type": "success-assigned-truncated",
+  "description": "Truncated success message for assigned link when full message is too long",
+  "template": [
+    "🎉 Link assigned: {undername}",
+    "",
+    "🌐 https://{undername}_{ownerArnsName}.ar.io",
+    "📋 {txId}",
+    "",
+    "✨ Powered by @ArNSdomains"
+  ],
+  "variables": ["undername", "ownerArnsName", "txId"],
+  "maxLength": 280,
+  "fallback": "success-minimal"
+}

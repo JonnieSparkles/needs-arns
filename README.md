@@ -92,6 +92,11 @@ ALLOWED_USERS=username1,username2,username3  # Comma-separated list (without @)
 
 # Time-based filtering (optional)
 MENTION_MAX_AGE_HOURS=24  # Only process mentions from last 24 hours
+
+# Monthly rate limit handling (optional)
+MONTHLY_RESET_DAY=25  # Day of month when monthly limits reset (1-31)
+MONTHLY_RESET_HOUR_UTC=0  # Hour in UTC when monthly limits reset (0-23)
+MONTHLY_RESET_MINUTE_UTC=0  # Minute in UTC when monthly limits reset (0-59)
 ```
 
 ### Install & Run
@@ -100,6 +105,25 @@ MENTION_MAX_AGE_HOURS=24  # Only process mentions from last 24 hours
 npm install
 npm start
 ```
+
+### Manual Mode
+
+For manual ArNS assignments and Twitter replies (bypasses bot polling):
+
+```bash
+npm run manual
+```
+
+**Interactive features:**
+- 📁 **Local file upload** - Upload files from your computer
+- 🌐 **URL download** - Download and upload from any URL
+- 🔗 **Existing TXID** - Assign existing Arweave transaction IDs
+- 📱 **Tweet extraction** - Extract media from tweet URLs (uses read quota)
+- 👤 **Username detection** - Auto-extract usernames from tweet URLs
+- 📝 **Reply preview** - Preview messages before sending
+- 🔄 **Archive integration** - Updates both local and Arweave archives
+- 📊 **Processed mentions** - Updates bot state to prevent reprocessing
+- 🔧 **Shared utilities** - Uses same codebase as main bot for consistency
 
 ### Turbo Credits (for Media Uploads)
 
@@ -111,6 +135,47 @@ The bot uses [Turbo SDK](https://github.com/ardriveapp/turbo-sdk) for fast, reli
 3. **Monitor usage:** Each upload shows the cost in winc
 
 **Cost:** Small images are often free, larger files cost minimal credits.
+
+## Template System
+
+The bot uses a centralized template system for all responses:
+
+### Template Files
+Located in `response-templates/` directory:
+- `success-uploaded.json` - Full success message for uploaded media
+- `success-assigned.json` - Full success message for assigned links
+- `success-uploaded-truncated.json` - Shorter version for uploaded media
+- `success-assigned-truncated.json` - Shorter version for assigned links
+- `success-minimal.json` - Minimal fallback message
+- `error-*.json` - Various error messages
+- `help.json` - Help command response
+- `loader.js` - Template loading and rendering system
+
+### Features
+- ✅ **Automatic Truncation** - Falls back to shorter versions when messages exceed 280 characters
+- ✅ **Variable Substitution** - Dynamic content with `{variable}` placeholders
+- ✅ **Fallback Chain** - Multiple fallback levels for character limits
+- ✅ **Consistent Branding** - Centralized @ArNSdomains attribution
+- ✅ **Easy Maintenance** - Update messages in one place for both bot and manual modes
+
+## Infrastructure Error Handling
+
+The bot intelligently categorizes errors and only replies to users for actionable issues:
+
+### Infrastructure Errors (No Reply to User)
+- 🚫 **Rate Limiting** - 429 errors from Twitter API
+- 🌐 **Network Issues** - Timeouts, connection failures, DNS issues
+- 🔧 **API Outages** - 5xx server errors, service unavailable
+- ⚡ **Arweave Issues** - Turbo service unavailable, Arweave network problems
+- 💾 **File System** - Permission issues, disk space, file access problems
+- 🧠 **Resource Issues** - Memory limits, file size limits
+
+### User Errors (Reply to User)
+- ❌ **Invalid Undername** - Format violations, length issues
+- 📝 **No Content** - Missing Arweave links or media
+- 🔒 **Access Denied** - User not in whitelist
+- 📋 **Name Taken** - Undername already assigned
+- ✅ **Other User-Actionable** - Errors users can fix or need to know about
 
 ## Deployment
 
@@ -147,11 +212,12 @@ The bot has been tested and confirmed working with:
 - ⏰ **Time Filtering**: Configurable time window for processing mentions (default: 24h)
 - 💾 **Persistent Storage**: Auto-saves processed mentions to `processed_mentions.json`
 - ⏱️ **Natural Timing**: 1-minute delay before success replies
-- 🛡️ **Error Handling**: Immediate error responses, graceful rate limit handling
+- 🛡️ **Smart Error Handling**: Only replies to user-actionable errors, skips infrastructure issues
 - 🚫 **Deduplication**: Each mention processed exactly once across restarts
 - 📊 **Detailed Tracking**: Logs username, undername, TXID, and success status for every mention
 - 🔍 **Smart Validation**: Only processes mentions starting with @NeedsArNS
 - 📈 **Audit Trail**: Complete history of all processed mentions with timestamps
+- 🔧 **Infrastructure Error Detection**: Automatically categorizes and handles rate limits, network issues, API outages
 
 ## Technical Stack & SDK References
 
@@ -174,6 +240,28 @@ The bot has been tested and confirmed working with:
 - **Configuration**: [`dotenv`](https://github.com/motdotla/dotenv) v17.2.2
 - **Platform**: Node.js ES modules with async/await patterns
 
+## Modular Architecture
+
+The codebase uses a clean, modular architecture with shared utilities:
+
+### Core Modules (`lib/`)
+- **`utils.js`** - Common utilities (validation, parsing, error handling, regex patterns)
+- **`arweave.js`** - Arweave/Turbo upload functions with client factory
+- **`archive.js`** - Archive management with ArNS integration
+- **`twitter.js`** - Twitter API functions with client factory and rate limiting
+- **`arns.js`** - ArNS-specific functions (availability checking, record creation)
+- **`media.js`** - Media processing and extraction from tweets
+- **`mentions.js`** - Twitter mention processing and response handlers
+- **`state.js`** - State management and persistence functions
+
+### Benefits
+- ✅ **Zero Code Duplication** - ~400+ lines of duplicate code eliminated
+- ✅ **Single Source of Truth** - All shared functionality centralized
+- ✅ **Easy Testing** - Individual modules can be tested independently
+- ✅ **Future-Proof** - New scripts can instantly use shared utilities
+- ✅ **Consistent Behavior** - Both bot and manual modes use identical logic
+- ✅ **Maintainable** - Bug fixes and features added in one place
+
 ## Features
 
 ### Core Functionality
@@ -184,12 +272,16 @@ The bot has been tested and confirmed working with:
 - ✅ **Mainnet Ready** - Configured for ArNS mainnet (ar.io)
 - ✅ **Sandbox Support** - Recognizes sandbox Arweave domains
 - ✅ **TTL Compliance** - Respects ArNS TTL limits (60-86400 seconds)
+- ✅ **Manual Mode** - Interactive script for manual ArNS assignments and Twitter replies
+- ✅ **Template System** - Centralized response templates with automatic truncation and fallbacks
 
 ### Performance Optimizations  
 - ✅ **Single API Call** - Optimized to 1 Twitter API call per polling cycle using expansions
 - ✅ **Rate Limit Handling** - Respects Twitter free plan limits (16min intervals with buffer)
+- ✅ **Monthly Cap Detection** - Automatically pauses when hitting monthly read limits
 - ✅ **Request Queuing** - Processes mentions sequentially to prevent race conditions
 - ✅ **Deduplication** - Prevents processing the same mention multiple times
+- ✅ **Infrastructure Error Handling** - Skips replying to users for infrastructure issues
 
 ### User Experience
 - ✅ **Access Control** - Optional whitelist system for controlling who can assign names
@@ -217,6 +309,10 @@ The bot has been tested and confirmed working with:
 - ✅ **Railway Ready** - Optimized for Railway deployment with environment configuration
 - ✅ **Error Recovery** - Graceful handling of rate limits, network issues, and API changes
 - ✅ **Production Monitoring** - Comprehensive logging for production debugging
+- ✅ **Manual Operations** - Interactive script for bypassing bot limitations and manual assignments
+- ✅ **Template Management** - Centralized response system with automatic character limit handling
+- ✅ **Modular Architecture** - Clean separation of concerns with shared utility modules
+- ✅ **Zero Duplication** - Single source of truth for all shared functionality
 
 ## Production Features
 
@@ -234,6 +330,8 @@ The bot has been tested and confirmed working with:
 - 📊 **Real-time Monitoring**: Debug endpoints for live system status
 - 🎯 **Enterprise Ready**: Production-tested with comprehensive error handling
 - 📈 **Complete Audit Trail**: JSON file tracks every mention with full details
+- 🔧 **Infrastructure Error Handling**: Automatically detects and handles infrastructure issues without bothering users
+- 📅 **Monthly Cap Management**: Automatically pauses when hitting Twitter monthly read limits
 
 ### User Experience
 - 🎉 **Celebratory Responses**: Fun, engaging replies with emojis
