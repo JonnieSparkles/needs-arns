@@ -121,9 +121,9 @@ async function main() {
 
     // Step 1: Get undername
     let undername = '';
-    while (!undername || !isValidUndername(undername)) {
+    while (!undername || !isValidUndername(undername.toLowerCase())) {
       undername = await askQuestion(rl, 'Enter the ArNS undername (a-z, 0-9, -, _): ');
-      if (!isValidUndername(undername)) {
+      if (!isValidUndername(undername.toLowerCase())) {
         console.log('❌ Invalid undername. Must be 1-51 chars, a-z, 0-9, -, _ (no leading/trailing dashes/underscores)');
       }
     }
