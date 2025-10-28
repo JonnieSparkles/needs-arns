@@ -84,7 +84,7 @@ ARWEAVE_JWK_B64=base64_encoded_wallet
 
 # Optional
 DEFAULT_TTL_SECONDS=60  # ArNS allows 60-86400 seconds (1 min - 24 hours)
-POLL_INTERVAL_MS=960000  # 16 minutes for Twitter free plan (1 request/15min with buffer)
+POLL_INTERVAL_MINUTES=16  # 16 minutes for Twitter free plan (1 request/15min with buffer)
 PORT=3000
 
 # Access Control (optional - leave empty for open access)
