@@ -4,7 +4,7 @@ import { ANT, ArweaveSigner, AOProcess } from '@ar.io/sdk';
 import express from 'express';
 import fs from 'fs';
 import { requireEnv, getJwkFromEnv, isValidUndername, isInfrastructureErrorType, verifyTxIdExists, ARWEAVE_TXID_RE, ASSIGN_CMD_RE } from './lib/utils.js';
-import { uploadToArweave, downloadMedia, getTurboClient } from './lib/arweave.js';
+import { uploadToArweave, uploadManifest, getTurboClient } from './lib/arweave.js';
 import { createMentionArchive, updateMentionArchive, buildMetadataObject } from './lib/archive.js';
 import { reply, retweet, getTwitterClient } from './lib/twitter.js';
 import { checkUndernameAvailability, createUndernameRecord } from './lib/arns.js';
@@ -250,9 +250,8 @@ async function handleMention(twitterClient, mention, includes) {
     // Create and upload manifest
     console.log('📦 Creating Arweave manifest...');
     const manifest = generateManifest(metadataTxId, mediaArray, htmlTxId);
-    const manifestTxId = await uploadToArweave(
+    const manifestTxId = await uploadManifest(
       Buffer.from(JSON.stringify(manifest, null, 2)),
-      'application/json',
       'NeedsArNS-Manifest',
       jwk
     );
@@ -286,7 +285,6 @@ async function handleMention(twitterClient, mention, includes) {
     // Update metadata object with final ArNS info
     metadataObj.archive.htmlTxId = htmlTxId;
     metadataObj.archive.manifestTxId = manifestTxId;
-    metadataObj.archive.arnsRecordId = onchainId;
     metadataObj.archive.assignedAt = new Date().toISOString();
     
     // Save individual mention archive

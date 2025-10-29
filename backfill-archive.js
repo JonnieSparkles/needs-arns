@@ -6,7 +6,7 @@ import { TwitterApi } from 'twitter-api-v2';
 import { ANT, ArweaveSigner } from '@ar.io/sdk';
 import fs from 'fs';
 import { createMentionArchive, buildMetadataObject, updateMentionArchive } from './lib/archive.js';
-import { uploadToArweave, getTurboClient } from './lib/arweave.js';
+import { uploadToArweave, uploadManifest, getTurboClient } from './lib/arweave.js';
 import { generateManifest } from './lib/manifest.js';
 import { generateTweetHTML } from './lib/html-generator.js';
 import { updateUndernameRecord } from './lib/arns.js';
@@ -48,21 +48,44 @@ async function backfillArchive() {
     const processedData = JSON.parse(fs.readFileSync('processed_mentions.json', 'utf8'));
     const processedDetails = processedData.processedDetails || {};
     
-    // Filter successful mentions only
-    const successfulMentions = Object.entries(processedDetails)
+    // Get all successful mentions at once (more efficient than individual API calls)
+    const successfulMentionIds = Object.entries(processedDetails)
       .filter(([id, details]) => details.success === true)
-      .slice(0, LIMIT);
+      .slice(0, LIMIT)
+      .map(([id, details]) => ({ id, details }));
     
-    console.log(`📊 Found ${successfulMentions.length} successful mentions to backfill\n`);
+    console.log(`📊 Found ${successfulMentionIds.length} successful mentions to backfill\n`);
+    
+    if (successfulMentionIds.length === 0) {
+      console.log('❌ No successful mentions found to backfill');
+      return;
+    }
+    
+    // Fetch all tweet data in one API call using tweet lookup
+    console.log('🔍 Fetching tweet data from Twitter...');
+    const tweetIds = successfulMentionIds.map(({ id }) => id);
+    const tweetResponse = await twitter.v2.tweets(tweetIds, {
+      'tweet.fields': ['referenced_tweets', 'created_at', 'entities', 'text', 'author_id', 'attachments'],
+      expansions: ['referenced_tweets.id', 'author_id', 'referenced_tweets.id.author_id'],
+      'user.fields': ['username', 'name', 'verified'],
+      'media.fields': ['type', 'url', 'width', 'height', 'alt_text']
+    });
+    
+    if (!tweetResponse.data || tweetResponse.data.length === 0) {
+      console.error('❌ No tweet data found');
+      return;
+    }
+    
+    console.log(`✅ Retrieved ${tweetResponse.data.length} tweets from API`);
     
     let processedCount = 0;
     let skippedCount = 0;
     let errorCount = 0;
     
-    for (const [mentionId, details] of successfulMentions) {
+    for (const { id: mentionId, details } of successfulMentionIds) {
       try {
         console.log(`\n${'='.repeat(70)}`);
-        console.log(`Processing mention ${processedCount + 1}/${successfulMentions.length}: ${mentionId}`);
+        console.log(`Processing mention ${processedCount + 1}/${successfulMentionIds.length}: ${mentionId}`);
         console.log(`Undername: ${details.undername}`);
         console.log(`Username: ${details.username}`);
         
@@ -73,22 +96,14 @@ async function backfillArchive() {
           continue;
         }
         
-        // Fetch tweet data from Twitter
-        console.log('🔍 Fetching tweet data from Twitter...');
-        const tweetResponse = await twitter.v2.singleTweet(mentionId, {
-          'tweet.fields': ['referenced_tweets', 'created_at', 'entities', 'text', 'author_id', 'attachments'],
-          expansions: ['referenced_tweets.id', 'author_id', 'referenced_tweets.id.author_id'],
-          'user.fields': ['username', 'name', 'verified'],
-          'media.fields': ['type', 'url', 'width', 'height', 'alt_text']
-        });
-        
-        if (!tweetResponse.data) {
-          console.warn('⚠️  Tweet not found or deleted, skipping...');
+        // Find tweet data from API response
+        const mention = tweetResponse.data.find(t => t.id === mentionId);
+        if (!mention) {
+          console.warn('⚠️  Tweet not found in API response, skipping...');
           skippedCount++;
           continue;
         }
         
-        const mention = tweetResponse.data;
         const includes = tweetResponse.includes || {};
         
         // Find parent tweet
@@ -159,9 +174,8 @@ async function backfillArchive() {
         // Create and upload manifest
         console.log('📦 Creating Arweave manifest...');
         const manifest = generateManifest(metadataTxId, mediaArray, htmlTxId);
-        const manifestTxId = await uploadToArweave(
+        const manifestTxId = await uploadManifest(
           Buffer.from(JSON.stringify(manifest, null, 2)),
-          'application/json',
           'NeedsArNS-Manifest',
           jwk
         );
@@ -179,7 +193,6 @@ async function backfillArchive() {
         // Update metadata object with final ArNS info
         metadataObj.archive.htmlTxId = htmlTxId;
         metadataObj.archive.manifestTxId = manifestTxId;
-        metadataObj.archive.arnsRecordId = details.onchainId; // Keep existing
         metadataObj.archive.assignedAt = details.timestamp;
         
         // Save individual mention archive
@@ -189,10 +202,7 @@ async function backfillArchive() {
         console.log(`🌐 View at: https://${details.undername}_${OWNER_ARNS_NAME}.ar.io`);
         processedCount++;
         
-        // Rate limit: wait 1 second between API calls
-        if (processedCount < successfulMentions.length) {
-          await new Promise(resolve => setTimeout(resolve, 1000));
-        }
+        // No rate limiting needed - we fetched all tweets in one API call
         
       } catch (error) {
         console.error(`❌ Error processing ${mentionId}:`, error.message);
