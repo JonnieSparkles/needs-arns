@@ -69,9 +69,9 @@ async function backfillArchive() {
     const tweetIds = successfulMentionIds.map(({ id }) => id);
     const tweetResponse = await twitter.v2.tweets(tweetIds, {
       'tweet.fields': ['referenced_tweets', 'created_at', 'entities', 'text', 'author_id', 'attachments'],
-      expansions: ['referenced_tweets.id', 'author_id', 'referenced_tweets.id.author_id'],
+      expansions: ['referenced_tweets.id', 'author_id', 'referenced_tweets.id.author_id', 'attachments.media_keys', 'referenced_tweets.id.attachments.media_keys'],
       'user.fields': ['username', 'name', 'verified'],
-      'media.fields': ['type', 'url', 'width', 'height', 'alt_text']
+      'media.fields': ['type', 'url', 'preview_image_url', 'width', 'height', 'variants', 'alt_text']
     });
     
     if (!tweetResponse.data || tweetResponse.data.length === 0) {
