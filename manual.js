@@ -6,7 +6,7 @@ import { TwitterApi } from 'twitter-api-v2';
 import { ANT, ArweaveSigner } from '@ar.io/sdk';
 import { requireEnv, getJwkFromEnv, isValidUndername, isInfrastructureErrorType, verifyTxIdExists, guessContentType, parseTweetId, extractUsernameFromUrl, ARWEAVE_TXID_RE } from './lib/utils.js';
 import { uploadToArweave, uploadManifest, downloadBuffer, getTurboClient } from './lib/arweave.js';
-import { createMentionArchive, buildMetadataObject } from './lib/archive.js';
+import { createMentionArchive, buildMetadataObject, uploadAndAssignArchiveIndex } from './lib/archive.js';
 import { reply, retweet, getTwitterClient } from './lib/twitter.js';
 import { generateManifest } from './lib/manifest.js';
 import { checkUndernameAvailability, createUndernameRecord } from './lib/arns.js';
@@ -20,14 +20,14 @@ const {
   TWITTER_APP_SECRET,
   TWITTER_ACCESS_TOKEN,
   TWITTER_ACCESS_SECRET,
-  OWNER_ARNS_NAME,
+  ROOT_ARNS_NAME,
   ANT_PROCESS_ID
 } = {
   TWITTER_APP_KEY: requireEnv('TWITTER_APP_KEY'),
   TWITTER_APP_SECRET: requireEnv('TWITTER_APP_SECRET'),
   TWITTER_ACCESS_TOKEN: requireEnv('TWITTER_ACCESS_TOKEN'),
   TWITTER_ACCESS_SECRET: requireEnv('TWITTER_ACCESS_SECRET'),
-  OWNER_ARNS_NAME: requireEnv('OWNER_ARNS_NAME'),
+  ROOT_ARNS_NAME: requireEnv('ROOT_ARNS_NAME'),
   ANT_PROCESS_ID: requireEnv('ANT_PROCESS_ID')
 };
 
@@ -450,9 +450,9 @@ async function main() {
     const templateType = 'success-tweet-replica';
     const body = renderTemplate(templateType, {
       undername,
-      ownerArnsName: OWNER_ARNS_NAME,
+      rootArnsName: ROOT_ARNS_NAME,
       manifestTxId
-    }) || `🎉 ${undername}_${OWNER_ARNS_NAME}.ar.io → ${manifestTxId}`;
+    }) || `🎉 ${undername}_${ROOT_ARNS_NAME}.ar.io → ${manifestTxId}`;
 
     console.log(`\n📝 Reply message:`);
     console.log('─'.repeat(50));
@@ -525,7 +525,7 @@ async function main() {
               processedAt: processedAt,
               archiveType: 'tweet_replica',
               success: true,
-              archiveVersion: '2.0'
+              archiveVersion: '2.0.0'
             },
             rawApiResponse: {
               fetchedAt: processedAt,
@@ -554,6 +554,19 @@ async function main() {
         const archiveFile = await createMentionArchive(archiveData);
         if (archiveFile) {
           console.log(`✅ Archive entry created: ${archiveFile}`);
+          
+          // Upload and assign archive index
+          console.log('📤 Uploading archive index...');
+          try {
+            const indexResult = await uploadAndAssignArchiveIndex(ant, jwk, ROOT_ARNS_NAME, DEFAULT_TTL_SECONDS);
+            if (indexResult.success) {
+              console.log(`✅ Archive index updated: ${indexResult.txId}`);
+            } else {
+              console.warn(`⚠️ Archive index update failed (non-critical): ${indexResult.message || indexResult.error}`);
+            }
+          } catch (error) {
+            console.warn(`⚠️ Archive index update error (non-critical): ${error.message}`);
+          }
         } else {
           console.log('⚠️  Archive entry creation failed, but assignment succeeded');
         }
@@ -564,7 +577,7 @@ async function main() {
     }
 
     console.log('\n🎉 Done! Your content is now permanently stored and named on Arweave!');
-    console.log(`🌐 View at: https://${undername}_${OWNER_ARNS_NAME}.ar.io`);
+    console.log(`🌐 View at: https://${undername}_${ROOT_ARNS_NAME}.ar.io`);
     console.log(`📦 Full tweet replica created with manifest: ${manifestTxId}`);
 
   } catch (error) {

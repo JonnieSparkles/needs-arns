@@ -5,7 +5,7 @@ import express from 'express';
 import fs from 'fs';
 import { requireEnv, getJwkFromEnv, isValidUndername, isInfrastructureErrorType, verifyTxIdExists, ARWEAVE_TXID_RE, ASSIGN_CMD_RE } from './lib/utils.js';
 import { uploadToArweave, uploadManifest, getTurboClient } from './lib/arweave.js';
-import { createMentionArchive, updateMentionArchive, buildMetadataObject } from './lib/archive.js';
+import { createMentionArchive, updateMentionArchive, buildMetadataObject, uploadAndAssignArchiveIndex } from './lib/archive.js';
 import { reply, retweet, getTwitterClient } from './lib/twitter.js';
 import { checkUndernameAvailability, createUndernameRecord } from './lib/arns.js';
 import { hasMediaAttachments, extractTxIdFromTweetData, getMediaUrls, processMediaFromTweet } from './lib/media.js';
@@ -21,13 +21,13 @@ const {
   TWITTER_APP_SECRET,
   TWITTER_ACCESS_TOKEN,
   TWITTER_ACCESS_SECRET,
-  OWNER_ARNS_NAME,
+  ROOT_ARNS_NAME,
 } = {
   TWITTER_APP_KEY: requireEnv('TWITTER_APP_KEY'),
   TWITTER_APP_SECRET: requireEnv('TWITTER_APP_SECRET'),
   TWITTER_ACCESS_TOKEN: requireEnv('TWITTER_ACCESS_TOKEN'),
   TWITTER_ACCESS_SECRET: requireEnv('TWITTER_ACCESS_SECRET'),
-  OWNER_ARNS_NAME: requireEnv('OWNER_ARNS_NAME')
+  ROOT_ARNS_NAME: requireEnv('ROOT_ARNS_NAME')
 };
 
 const ANT_PROCESS_ID = requireEnv('ANT_PROCESS_ID');
@@ -293,12 +293,12 @@ async function handleMention(twitterClient, mention, includes) {
     const templateType = 'success-tweet-replica';
     const msg = renderTemplate(templateType, {
       undername,
-      ownerArnsName: OWNER_ARNS_NAME,
+      rootArnsName: ROOT_ARNS_NAME,
       manifestTxId
     });
     
     if (!msg) {
-      const fallbackMsg = `🎉 ${undername}_${OWNER_ARNS_NAME}.ar.io → ${manifestTxId}`;
+      const fallbackMsg = `🎉 ${undername}_${ROOT_ARNS_NAME}.ar.io → ${manifestTxId}`;
       console.log('⚠️ Template loading failed, using fallback message');
       const replyTweetId = await reply(twitterClient, mention.id, fallbackMsg);
       return;
@@ -448,6 +448,19 @@ async function pollMentionsForever() {
             // Save state after each processed mention
             saveProcessedState(processedMentions, sinceId, processedDetails, PROCESSED_MENTIONS_FILE);
             }
+            
+            // Upload and assign archive index at end of cycle
+            console.log('📤 Uploading archive index at end of cycle...');
+            try {
+              const indexResult = await uploadAndAssignArchiveIndex(ant, jwk, ROOT_ARNS_NAME, DEFAULT_TTL_SECONDS);
+              if (indexResult.success) {
+                console.log(`✅ Archive index updated: ${indexResult.txId}`);
+              } else {
+                console.warn(`⚠️ Archive index update failed (non-critical): ${indexResult.message || indexResult.error}`);
+              }
+            } catch (error) {
+              console.warn(`⚠️ Archive index update error (non-critical): ${error.message}`);
+            }
           }
         } else {
           console.log('⏰ No recent mentions to process after time filtering');
@@ -503,7 +516,7 @@ app.get('/debug', (_req, res) => {
       hasTwitterKeys: !!(TWITTER_APP_KEY && TWITTER_APP_SECRET),
       hasArweaveWallet: !!jwk,
       hasArnsProcessId: !!ANT_PROCESS_ID,
-      ownerArnsName: OWNER_ARNS_NAME
+      rootArnsName: ROOT_ARNS_NAME
     }
   });
 });

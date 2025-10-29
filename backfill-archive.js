@@ -26,7 +26,7 @@ const twitter = new TwitterApi({
 
 // Arweave/ArNS setup
 const ANT_PROCESS_ID = requireEnv('ANT_PROCESS_ID');
-const OWNER_ARNS_NAME = requireEnv('OWNER_ARNS_NAME');
+const ROOT_ARNS_NAME = requireEnv('ROOT_ARNS_NAME');
 const DEFAULT_TTL_SECONDS = parseInt(process.env.DEFAULT_TTL_SECONDS || '60', 10);
 const TEMPLATE_HTML_TXID = requireEnv('TEMPLATE_HTML_TXID');
 const jwk = getJwkFromEnv();
@@ -209,7 +209,7 @@ async function backfillArchive() {
         await createMentionArchive(metadataObj);
         
         console.log(`✅ Complete backfill: ${mentionId}`);
-        console.log(`🌐 View at: https://${details.undername}_${OWNER_ARNS_NAME}.ar.io`);
+        console.log(`🌐 View at: https://${details.undername}_${ROOT_ARNS_NAME}.ar.io`);
         processedCount++;
         
         // No rate limiting needed - we fetched all tweets in one API call

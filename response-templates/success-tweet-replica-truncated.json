@@ -5,12 +5,12 @@
     "🎉 Tweet archived!",
     "",
     "📱 {undername}",
-    "🌐 {undername}_{ownerArnsName}.ar.io",
+    "🌐 {undername}_{rootArnsName}.ar.io",
     "📋 {manifestTxId}",
     "",
     "✨ @ArNSdomains"
   ],
-  "variables": ["undername", "ownerArnsName", "manifestTxId"],
+  "variables": ["undername", "rootArnsName", "manifestTxId"],
   "maxLength": 280
 }
 

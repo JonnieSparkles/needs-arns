@@ -22,7 +22,7 @@ Built with enterprise-grade optimization, access control, monitoring, and **Turb
 
 **Note:** For posts with multiple images/videos, the bot processes only the **first media attachment** to keep the experience simple and predictable.
 
-### Archive System v2.1
+### Archive System v2.0
 
 After each successful assignment, the bot automatically creates a complete tweet replica archive on Arweave:
 
@@ -79,13 +79,15 @@ Original Tweet: "Check out my NFT! https://arweave.net/abc123..."
 Reply: "@NeedsArNS assign cool-nft"
 
 Bot Response:
-🎉 Undername assigned!
-🔗 Link assigned!
-ar://cool-nft_yourname
-cool-nft_yourname.ar.io
-→ abc123...
+🎉 Success! Your tweet is now permanently archived!
 
-Powered by @ArNSdomains
+📱 Tweet replica created: cool-nft
+
+🌐 https://cool-nft_yourname.ar.io
+🔗 ar://cool-nft_yourname
+📋 abc123...
+
+✨ Powered by @ArNSdomains
 ```
 
 **Media Upload:**
@@ -94,13 +96,15 @@ Original Tweet: "My latest artwork! [IMAGE ATTACHED]"
 Reply: "@NeedsArNS assign my-art"
 
 Bot Response:  
-🎉 Undername assigned!
-📸 Media uploaded & assigned!
-ar://my-art_yourname
-my-art_yourname.ar.io
-→ xyz789...
+🎉 Success! Your tweet is now permanently archived!
 
-Powered by @ArNSdomains
+📱 Tweet replica created: my-art
+
+🌐 https://my-art_yourname.ar.io
+🔗 ar://my-art_yourname
+📋 xyz789...
+
+✨ Powered by @ArNSdomains
 ```
 
 ## Setup
@@ -115,7 +119,7 @@ TWITTER_ACCESS_TOKEN=your_access_token
 TWITTER_ACCESS_SECRET=your_access_secret
 
 # ArNS (configured for mainnet)
-OWNER_ARNS_NAME=your_arns_name
+ROOT_ARNS_NAME=your_arns_name
 ANT_PROCESS_ID=your_process_id
 WALLET_ADDRESS=your_wallet_address  # For reference/transparency
 
@@ -123,6 +127,9 @@ WALLET_ADDRESS=your_wallet_address  # For reference/transparency
 ARWEAVE_JWK_JSON={"kty":"RSA",...}
 # OR
 ARWEAVE_JWK_B64=base64_encoded_wallet
+
+# Template System (required)
+TEMPLATE_HTML_TXID=your_template_txid  # Shared HTML template txId for tweet replicas (upload post-templates/post-replica-template.html first)
 
 # Optional
 DEFAULT_TTL_SECONDS=60  # ArNS allows 60-86400 seconds (1 min - 24 hours)
@@ -137,11 +144,6 @@ MENTION_MAX_AGE_HOURS=24  # Only process mentions from last 24 hours
 
 # Retweet behavior (optional)
 ENABLE_RETWEETS=true  # Set to false to disable retweets (saves posts for rate limits)
-
-# Monthly rate limit handling (optional)
-MONTHLY_RESET_DAY=25  # Day of month when monthly limits reset (1-31)
-MONTHLY_RESET_HOUR_UTC=0  # Hour in UTC when monthly limits reset (0-23)
-MONTHLY_RESET_MINUTE_UTC=0  # Minute in UTC when monthly limits reset (0-59)
 ```
 
 ### Install & Run
@@ -188,10 +190,10 @@ The bot uses a centralized template system for all responses:
 
 ### Template Files
 Located in `response-templates/` directory:
-- `success-uploaded.json` - Full success message for uploaded media
-- `success-assigned.json` - Full success message for assigned links
-- `success-uploaded-truncated.json` - Shorter version for uploaded media
-- `success-assigned-truncated.json` - Shorter version for assigned links
+- `success-tweet-replica.json` - Full success message for tweet replica archives (used for all assignments)
+- `success-tweet-replica-truncated.json` - Shorter version if message exceeds 280 characters
+- `success-uploaded.json` - Legacy template (deprecated, kept for compatibility)
+- `success-assigned.json` - Legacy template (deprecated, kept for compatibility)
 - `success-minimal.json` - Minimal fallback message
 - `error-*.json` - Various error messages
 - `help.json` - Help command response
@@ -324,7 +326,7 @@ The codebase uses a clean, modular architecture with shared utilities:
 ### Performance Optimizations  
 - ✅ **Single API Call** - Optimized to 1 Twitter API call per polling cycle using expansions
 - ✅ **Rate Limit Handling** - Respects Twitter free plan limits (16min intervals with buffer)
-- ✅ **Monthly Cap Detection** - Automatically pauses when hitting monthly read limits
+- ✅ **Automatic Backoff** - Handles rate limit errors (429) with appropriate delays
 - ✅ **Request Queuing** - Processes mentions sequentially to prevent race conditions
 - ✅ **Deduplication** - Prevents processing the same mention multiple times
 - ✅ **Infrastructure Error Handling** - Skips replying to users for infrastructure issues
@@ -341,7 +343,7 @@ The codebase uses a clean, modular architecture with shared utilities:
 - ✅ **Undername Validation** - Enforces ArNS naming rules (1-51 chars, a-z, 0-9, -, _)
 - ✅ **Friendly Denial Messages** - Polite responses for unauthorized users
 
-### Archive System v2.1
+### Archive System v2.0
 - ✅ **Tweet Replicas** - Creates complete, self-contained tweet replicas on Arweave with all media
 - ✅ **Individual Files** - Each mention gets its own JSON file in `archive/mentions/` for scalability
 - ✅ **Master Index** - Centralized index in `archive/metadata/archive-index.json` for quick lookups
@@ -380,7 +382,6 @@ The codebase uses a clean, modular architecture with shared utilities:
 - 🎯 **Enterprise Ready**: Production-tested with comprehensive error handling
 - 📈 **Complete Audit Trail**: JSON file tracks every mention with full details
 - 🔧 **Infrastructure Error Handling**: Automatically detects and handles infrastructure issues without bothering users
-- 📅 **Monthly Cap Management**: Automatically pauses when hitting Twitter monthly read limits
 
 ### User Experience
 - 🎉 **Celebratory Responses**: Fun, engaging replies with emojis
@@ -420,25 +421,5 @@ The bot automatically creates and maintains `processed_mentions.json` with detai
 - 🛡️ **Security Monitoring**: Track access denial attempts and errors
 - ⏰ **Time Filtering**: Automatically ignores mentions older than configured threshold
 
-### Archive File
-The bot automatically creates and maintains `archive.json` with public gallery data:
-
-```json
-{
-  "metadata": {
-    "lastUpdated": "2025-09-28T03:51:36.330Z",
-    "totalRecords": 8,
-    "version": "1.0",
-    "description": "NeedsArNS Bot Archive - All successfully archived content"
-  },
-  "records": [
-    {
-      "undername": "sparkles",
-      "txId": "JT8Am2siXDVuaaAsLiHz8mVraEN7OSHxHkhvf6dJrpc",
-      "username": "JonnieSparkles",
-      "timestamp": "2025-09-28T03:33:28.649Z",
-      "isUploadedMedia": true
-    }
-  ]
-}
-```
+### Archive Index
+The bot automatically creates and maintains `archive/metadata/archive-index.json` with a master index of all archived mentions. See the archive structure section above for details.

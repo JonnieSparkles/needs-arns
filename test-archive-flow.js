@@ -59,7 +59,7 @@ const TWITTER_ACCESS_TOKEN = requireEnv('TWITTER_ACCESS_TOKEN');
 const TWITTER_ACCESS_SECRET = requireEnv('TWITTER_ACCESS_SECRET');
 
 const ANT_PROCESS_ID = requireEnv('ANT_PROCESS_ID');
-const OWNER_ARNS_NAME = requireEnv('OWNER_ARNS_NAME');
+const ROOT_ARNS_NAME = requireEnv('ROOT_ARNS_NAME');
 const DEFAULT_TTL_SECONDS = parseInt(process.env.DEFAULT_TTL_SECONDS || '60', 10);
 const TEMPLATE_HTML_TXID = requireEnv('TEMPLATE_HTML_TXID');
 
@@ -226,7 +226,7 @@ async function testArchiveFlowForTweet(tweet, includes, twitterUrl, undername, i
       htmlTxId,
       manifestTxId,
       archiveFile,
-      arnsUrl: `https://${undername}_${OWNER_ARNS_NAME}.ar.io`
+      arnsUrl: `https://${undername}_${ROOT_ARNS_NAME}.ar.io`
     };
     
     console.log('\n✅ TEST COMPLETE!');

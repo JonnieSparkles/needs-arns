@@ -6,13 +6,13 @@
     "",
     "📱 Tweet replica created: {undername}",
     "",
-    "🌐 https://{undername}_{ownerArnsName}.ar.io",
-    "🔗 ar://{undername}_{ownerArnsName}",
+    "🌐 https://{undername}_{rootArnsName}.ar.io",
+    "🔗 ar://{undername}_{rootArnsName}",
     "📋 {manifestTxId}",
     "",
     "✨ Powered by @ArNSdomains"
   ],
-  "variables": ["undername", "ownerArnsName", "manifestTxId"],
+  "variables": ["undername", "rootArnsName", "manifestTxId"],
   "maxLength": 280,
   "fallback": "success-tweet-replica-truncated"
 }
