@@ -285,6 +285,7 @@ async function handleMention(twitterClient, mention, includes) {
     // Update metadata object with final ArNS info
     metadataObj.archive.htmlTxId = htmlTxId;
     metadataObj.archive.manifestTxId = manifestTxId;
+    metadataObj.archive.arnsRecordId = onchainId;
     metadataObj.archive.assignedAt = new Date().toISOString();
     
     // Save individual mention archive

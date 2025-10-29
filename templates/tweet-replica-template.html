@@ -121,6 +121,14 @@
       display: block;
     }
     
+    .video-error-fallback {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 12px;
+    }
+    
     .archive-footer {
       margin-top: 16px;
       padding-top: 16px;
@@ -184,13 +192,16 @@
       return text.replace(/[&<>"']/g, m => map[m]);
     }
     
-    // Format date
+    // Format date and time
     function formatDate(dateString) {
       const date = new Date(dateString);
-      return date.toLocaleDateString('en-US', { 
+      return date.toLocaleString('en-US', { 
         month: 'short', 
         day: 'numeric', 
-        year: 'numeric' 
+        year: 'numeric',
+        hour: 'numeric',
+        minute: '2-digit',
+        second: '2-digit'
       });
     }
     
@@ -237,12 +248,26 @@
             </div>
           </div>`;
         } else if (media.type === 'video' || media.type === 'animated_gif') {
+          const videoAttrs = media.type === 'animated_gif' ? 'autoplay loop muted' : 'controls';
           mediaItems += `
           <div class="media-item${spanFull}">
-            <video controls ${media.type === 'animated_gif' ? 'autoplay loop muted' : ''}>
+            <video ${videoAttrs} 
+                   preload="metadata"
+                   onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';"
+                   onloadeddata="this.nextElementSibling.style.display='none';"
+                   style="width: 100%; height: 100%; object-fit: cover; display: block;">
               <source src="${arweaveGateway}/${media.txId}" type="video/mp4">
+              <source src="${arweaveGateway}/${media.txId}" type="video/webm">
               Your browser does not support the video tag.
             </video>
+            <div class="video-error-fallback" style="display: none; position: absolute; top: 0; left: 0; right: 0; bottom: 0; background: #1c2938; border-radius: 8px;">
+              <div style="font-size: 48px;">📹</div>
+              <p style="color: #8b98a5;">Video unavailable</p>
+              <a href="${arweaveGateway}/${media.txId}" target="_blank" 
+                 style="color: #1d9bf0; text-decoration: none; padding: 8px 16px; border: 1px solid #1d9bf0; border-radius: 4px;">
+                View Video
+              </a>
+            </div>
           </div>`;
         }
       });
@@ -250,7 +275,23 @@
       return `<div class="media-grid ${gridClass}">${mediaItems}</div>`;
     }
     
-    // Replace t.co links with expanded URLs
+    // Filter out Twitter-generated media links (these are auto-added, not user-provided)
+    function filterUserLinks(entities) {
+      if (!entities?.urls) return { urls: [] };
+      
+      return {
+        urls: entities.urls.filter(urlEntity => {
+          const expandedUrl = urlEntity.expanded_url || '';
+          // Skip Twitter auto-generated media links
+          const isMediaLink = /\/status\/\d+\/(photo|video)\/\d+/i.test(expandedUrl) ||
+                              /^https?:\/\/(pic\.)?x\.com\//i.test(expandedUrl);
+          return !isMediaLink;
+        })
+      };
+    }
+    
+    // Replace t.co links with expanded URLs (only user-provided links)
+    // Remove Twitter media links entirely from the text
     function expandUrls(text, entities) {
       if (!entities?.urls || entities.urls.length === 0) {
         return text;
@@ -258,14 +299,26 @@
       
       let expandedText = text;
       
-      // Replace each t.co URL with its expanded version
+      // Process all URL entities
       entities.urls.forEach(urlEntity => {
+        const expandedUrl = urlEntity.expanded_url || '';
         const tcoUrl = urlEntity.url;
-        const expandedUrl = urlEntity.expanded_url;
         
-        // Replace t.co URL with expanded URL in the text
-        expandedText = expandedText.replace(tcoUrl, expandedUrl);
+        // Check if this is a Twitter media link
+        const isMediaLink = /\/status\/\d+\/(photo|video)\/\d+/i.test(expandedUrl) ||
+                            /^https?:\/\/(pic\.)?x\.com\//i.test(expandedUrl);
+        
+        if (isMediaLink) {
+          // Remove the t.co URL entirely (with surrounding spaces if present)
+          expandedText = expandedText.replace(new RegExp(`\\s*${tcoUrl.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\s*`, 'g'), ' ').trim();
+        } else {
+          // Expand user-provided links
+          expandedText = expandedText.replace(tcoUrl, expandedUrl);
+        }
       });
+      
+      // Clean up any extra whitespace
+      expandedText = expandedText.replace(/\s+/g, ' ').trim();
       
       return expandedText;
     }
