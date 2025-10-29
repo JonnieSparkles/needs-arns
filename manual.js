@@ -525,7 +525,7 @@ async function main() {
               processedAt: processedAt,
               archiveType: 'tweet_replica',
               success: true,
-              archiveVersion: '2.2'
+              archiveVersion: '2.0'
             },
             rawApiResponse: {
               fetchedAt: processedAt,

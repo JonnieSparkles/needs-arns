@@ -39,7 +39,7 @@ When someone visits `undername_yourname.ar.io`, Arweave serves the manifest whic
 ```
 archive/
 ├── metadata/
-│   └── index.json          # Master index of all mentions
+│   └── archive-index.json  # Master index of all mentions
 └── mentions/
     ├── {mentionId}.json    # Individual mention metadata files
     └── ...
@@ -344,7 +344,7 @@ The codebase uses a clean, modular architecture with shared utilities:
 ### Archive System v2.1
 - ✅ **Tweet Replicas** - Creates complete, self-contained tweet replicas on Arweave with all media
 - ✅ **Individual Files** - Each mention gets its own JSON file in `archive/mentions/` for scalability
-- ✅ **Master Index** - Centralized index in `archive/metadata/index.json` for quick lookups
+- ✅ **Master Index** - Centralized index in `archive/metadata/archive-index.json` for quick lookups
 - ✅ **Arweave Manifests** - Uses arweave/paths v0.2.0 manifest format for proper bundling
 - ✅ **Template System** - Shared HTML template reduces data by 62% when configured
 - ✅ **Complete Preservation** - Full tweet text, media with alt text, timestamps, and metadata

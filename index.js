@@ -95,7 +95,7 @@ const turbo = getTurboClient(jwk);
 async function handleMention(twitterClient, mention, includes) {
   const authorId = mention.author_id;
   const author = includes?.users?.find(u => u.id === authorId);
-  const username = author?.username || 'unknown';
+  const mentionUsername = author?.username || 'unknown';
   
   try {
     // Check format FIRST - if it's not a valid command, completely ignore
@@ -123,7 +123,7 @@ async function handleMention(twitterClient, mention, includes) {
       
       // Record failed assignment (name taken)
       processedDetails[mention.id] = {
-        username: username,
+        mentionUsername: mentionUsername,
         undername: undername,
         success: false,
         reason: 'undername_taken',
@@ -139,13 +139,13 @@ async function handleMention(twitterClient, mention, includes) {
     if (!isUserAllowed(mention, includes, ALLOWED_USERS)) {
       // Record denied access attempt
       processedDetails[mention.id] = {
-        username: username,
+        mentionUsername: mentionUsername,
         success: false,
         reason: 'access_denied',
         timestamp: new Date().toISOString()
       };
       
-      await handleAccessDenied(twitterClient, mention.id, username);
+      await handleAccessDenied(twitterClient, mention.id, mentionUsername);
       return;
     }
     
@@ -252,7 +252,7 @@ async function handleMention(twitterClient, mention, includes) {
         
         // Record failed assignment (name taken)
         processedDetails[mention.id] = {
-          username: username,
+          mentionUsername: mentionUsername,
           undername: undername,
           success: false,
           reason: 'undername_taken',
@@ -279,7 +279,7 @@ async function handleMention(twitterClient, mention, includes) {
     
     // Record successful assignment in processed state
     processedDetails[mention.id] = {
-      username: username,
+      mentionUsername: mentionUsername,
       undername: undername,
       txId: manifestTxId,
       onchainId: onchainId,
@@ -325,7 +325,7 @@ async function handleMention(twitterClient, mention, includes) {
     
     // Record failed assignment (error)
     processedDetails[mention.id] = {
-      username: username,
+      mentionUsername: mentionUsername,
       success: false,
       reason: 'error',
       error: err?.message || 'unknown error',

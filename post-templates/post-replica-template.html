@@ -24,6 +24,7 @@
   <!-- Additional SEO -->
   <meta name="robots" content="index, follow">
   <meta name="author" content="NeedsArNS">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🏛️</text></svg>">
   <style>
     * {
       margin: 0;
@@ -259,6 +260,107 @@
     .request-info strong {
       color: #ffffff;
     }
+    
+    .request-info a {
+      color: #71767a;
+      text-decoration: none;
+    }
+    
+    .request-info a:hover {
+      color: #ffffff;
+      text-decoration: underline;
+    }
+    
+    /* Lightbox styles */
+    .lightbox {
+      display: none;
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background-color: rgba(0, 0, 0, 0.95);
+      z-index: 1000;
+      cursor: pointer;
+      align-items: center;
+      justify-content: center;
+    }
+    
+    .lightbox.active {
+      display: flex;
+    }
+    
+    .lightbox-content {
+      max-width: 90vw;
+      max-height: 90vh;
+      object-fit: contain;
+    }
+    
+    .lightbox-content video {
+      max-width: 90vw;
+      max-height: 90vh;
+      width: auto;
+      height: auto;
+    }
+    
+    .lightbox-close {
+      position: absolute;
+      top: 20px;
+      right: 30px;
+      color: #ffffff;
+      font-size: 40px;
+      font-weight: bold;
+      cursor: pointer;
+      z-index: 1001;
+      line-height: 1;
+    }
+    
+    .lightbox-close:hover {
+      opacity: 0.7;
+    }
+    
+    .media-item {
+      cursor: pointer;
+      transition: opacity 0.2s;
+      position: relative;
+    }
+    
+    .media-item:hover {
+      opacity: 0.9;
+    }
+    
+    .media-item video {
+      cursor: pointer;
+    }
+    
+    .media-item .expand-icon {
+      position: absolute;
+      top: 12px;
+      right: 12px;
+      background-color: rgba(0, 0, 0, 0.8);
+      border-radius: 50%;
+      width: 40px;
+      height: 40px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 18px;
+      cursor: pointer;
+      opacity: 0;
+      transition: opacity 0.2s;
+      pointer-events: auto;
+      z-index: 10;
+      border: 1px solid rgba(255, 255, 255, 0.3);
+    }
+    
+    .media-item:hover .expand-icon {
+      opacity: 1;
+    }
+    
+    .media-item .expand-icon:hover {
+      background-color: rgba(0, 0, 0, 0.9);
+      transform: scale(1.1);
+    }
   </style>
 </head>
 <body>
@@ -283,6 +385,17 @@
     <div id="tweet-content" style="display: none;">
       <!-- Will be populated by JavaScript -->
     </div>
+  </div>
+  
+  <!-- Lightbox for expanded media -->
+  <div class="lightbox" id="lightbox" onclick="closeLightbox(event)">
+    <span class="lightbox-close" onclick="closeLightbox(event)">&times;</span>
+    <img class="lightbox-content" id="lightbox-img" src="" alt="Expanded media" onclick="event.stopPropagation();">
+    <video class="lightbox-content" id="lightbox-video" controls preload="auto" playsinline style="display: none;" onclick="event.stopPropagation();">
+      <source id="lightbox-video-source-mp4" src="" type="video/mp4">
+      <source id="lightbox-video-source-webm" src="" type="video/webm">
+      Your browser does not support the video tag.
+    </video>
   </div>
 
   <script>
@@ -315,6 +428,31 @@
     }
     
     const arweaveGateway = detectGateway();
+    
+    // Get ArNS name and construct gateway host
+    function getArnsGatewayHost() {
+      const hostname = window.location.hostname;
+      
+      // If we're on arweave.net, return ar.io (default ArNS gateway)
+      if (hostname.includes('arweave.net')) {
+        return 'ar.io';
+      }
+      
+      // Extract gateway from ArNS hostname
+      if (hostname.includes('.')) {
+        const parts = hostname.split('.');
+        if (parts.length >= 3) {
+          // Remove first part (ArNS name) to get gateway
+          return parts.slice(1).join('.');
+        } else {
+          // Already a gateway domain
+          return hostname;
+        }
+      }
+      
+      // Fallback
+      return 'ar.io';
+    }
     
     // Escape HTML to prevent XSS
     function escapeHtml(text) {
@@ -359,25 +497,30 @@
       
       mediaArray.slice(0, 4).forEach((media, index) => {
         const spanFull = (count === 3 && index === 0) ? ' span-full' : '';
+        const mediaSrc = `${arweaveGateway}/${media.txId}`;
         
         if (media.type === 'photo') {
+          const escapedSrc = mediaSrc.replace(/'/g, "\\'");
+          const escapedAlt = escapeHtml(media.alt_text || 'Image').replace(/'/g, "\\'");
           mediaItems += `
-          <div class="media-item${spanFull}">
-            <img src="${arweaveGateway}/${media.txId}" alt="${escapeHtml(media.alt_text || 'Image')}">
+          <div class="media-item${spanFull}" onclick="openLightbox('${escapedSrc}', 'image', '${escapedAlt}')">
+            <img src="${mediaSrc}" alt="${escapeHtml(media.alt_text || 'Image')}">
           </div>`;
         } else if (media.type === 'link') {
           // Smart preview for link type content
+          const escapedSrc = mediaSrc.replace(/'/g, "\\'");
+          const escapedAlt = escapeHtml(media.alt_text || 'Content preview').replace(/'/g, "\\'");
           mediaItems += `
-          <div class="media-item${spanFull}">
+          <div class="media-item${spanFull}" onclick="openLightbox('${escapedSrc}', 'image', '${escapedAlt}')">
             <div style="position: relative; width: 100%; height: 300px; background: #16181c; border-radius: 8px; display: flex; align-items: center; justify-content: center;">
-              <img src="${arweaveGateway}/${media.txId}" 
+              <img src="${mediaSrc}" 
                    style="max-width: 100%; max-height: 100%; object-fit: contain;"
                    alt="${escapeHtml(media.alt_text || 'Content preview')}"
                    onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';">
               <div style="display: none; flex-direction: column; align-items: center; gap: 12px;">
                 <div style="font-size: 48px;">📄</div>
                 <p style="color: #71767a;">Content Preview</p>
-                <a href="${arweaveGateway}/${media.txId}" target="_blank" 
+                <a href="${mediaSrc}" target="_blank" onclick="event.stopPropagation();"
                    style="color: #ffffff; text-decoration: none; padding: 8px 16px; border: 1px solid #2f3336; border-radius: 4px; transition: opacity 0.2s;">
                   View Full Content
                 </a>
@@ -385,22 +528,33 @@
             </div>
           </div>`;
         } else if (media.type === 'video' || media.type === 'animated_gif') {
-          const videoAttrs = media.type === 'animated_gif' ? 'autoplay loop muted' : 'controls';
+          const isAnimatedGif = media.type === 'animated_gif';
+          const videoAttrs = isAnimatedGif ? 'autoplay loop muted playsinline' : 'controls preload="metadata" playsinline';
+          const escapedSrc = mediaSrc.replace(/'/g, "\\'");
+          const escapedAlt = escapeHtml(media.alt_text || 'Video').replace(/'/g, "\\'");
+          
+          // For animated gifs, make the whole area clickable. For videos with controls, add expand icon.
+          const clickHandler = isAnimatedGif 
+            ? `onclick="openLightbox('${escapedSrc}', 'video', '${escapedAlt}')"`
+            : '';
+          const expandIcon = isAnimatedGif ? '' : `<div class="expand-icon" onclick="event.stopPropagation(); openLightbox('${escapedSrc}', 'video', '${escapedAlt}')">🔍</div>`;
+          
           mediaItems += `
-          <div class="media-item${spanFull}">
+          <div class="media-item${spanFull}" ${clickHandler}>
+            ${expandIcon}
             <video ${videoAttrs} 
-                   preload="metadata"
                    onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';"
                    onloadeddata="this.nextElementSibling.style.display='none';"
-                   style="width: 100%; height: 100%; object-fit: cover; display: block;">
-              <source src="${arweaveGateway}/${media.txId}" type="video/mp4">
-              <source src="${arweaveGateway}/${media.txId}" type="video/webm">
+                   style="width: 100%; height: 100%; object-fit: cover; display: block;"
+                   ${isAnimatedGif ? `onclick="event.stopPropagation(); openLightbox('${escapedSrc}', 'video', '${escapedAlt}')"` : ''}>
+              <source src="${mediaSrc}" type="video/mp4">
+              <source src="${mediaSrc}" type="video/webm">
               Your browser does not support the video tag.
             </video>
-            <div class="video-error-fallback" style="display: none; position: absolute; top: 0; left: 0; right: 0; bottom: 0; background: #16181c; border-radius: 8px;">
+            <div class="video-error-fallback" style="display: none; position: absolute; top: 0; left: 0; right: 0; bottom: 0; background: #16181c; border-radius: 8px; z-index: 5;">
               <div style="font-size: 48px;">📹</div>
               <p style="color: #71767a;">Video unavailable</p>
-              <a href="${arweaveGateway}/${media.txId}" target="_blank" 
+              <a href="${mediaSrc}" target="_blank" onclick="event.stopPropagation();"
                  style="color: #ffffff; text-decoration: none; padding: 8px 16px; border: 1px solid #2f3336; border-radius: 4px; transition: opacity 0.2s;">
                 View Video
               </a>
@@ -482,6 +636,12 @@
       // Expand URLs in tweet text
       const expandedText = expandUrls(parentText, parentEntities);
       
+      // Get undername and construct ArNS link
+      const undername = metadata.metadata?.undername || '';
+      const gatewayHost = getArnsGatewayHost();
+      const arnsLink = undername ? `${undername}_needsarns.${gatewayHost}` : '';
+      const arnsLinkHtml = arnsLink ? `<br><strong>ar://</strong> <a href="https://${arnsLink}" target="_blank">${arnsLink}</a>` : '';
+      
       const html = `
         <div class="tweet-header">
           <div class="user-info">
@@ -499,8 +659,9 @@
           <div class="request-info">
             <strong>Requested by:</strong> @${escapeHtml(mentionUsername)}<br>
             <strong>Archived:</strong> ${requestDate}<br>
-            <strong>Original post:</strong> <a href="https://x.com/${escapeHtml(parentUsername)}/status/${parentTweet.id}" target="_blank" style="color: #ffffff; text-decoration: none;">View on X/Twitter</a>
+            <strong>Original post:</strong> <a href="https://x.com/${escapeHtml(parentUsername)}/status/${parentTweet.id}" target="_blank">View on X/Twitter</a>${arnsLinkHtml}
           </div>
+          <div style="margin-top: 8px; font-size: 12px; color: #71767a;">Archive v2.0</div>
         </div>
       `;
       
@@ -533,13 +694,97 @@
     // Fetch metadata from a TXID (either manifest or direct metadata)
     async function fetchMetadataFromTxId(txId) {
       try {
-        // First, try to fetch as manifest
-        const manifestResponse = await fetch(`${arweaveGateway}/${txId}`);
-        if (!manifestResponse.ok) {
-          throw new Error(`Failed to fetch ${txId}`);
+        // Strategy: Try multiple methods to fetch the manifest/transaction data
+        let manifestData = null;
+        let lastError = null;
+        
+        // Method 1: Try manifest.json path on the TXID (some gateways support this)
+        try {
+          const manifestPathResponse = await fetch(`${arweaveGateway}/${txId}/manifest.json`, {
+            headers: { 'Accept': 'application/json' }
+          });
+          if (manifestPathResponse.ok) {
+            const contentType = manifestPathResponse.headers.get('content-type') || '';
+            if (contentType.includes('json')) {
+              manifestData = await manifestPathResponse.json();
+              console.log('Fetched manifest via /manifest.json path');
+            }
+          }
+        } catch (e) {
+          lastError = e;
         }
         
-        const manifestData = await manifestResponse.json();
+        // Method 2: Try direct TXID fetch with JSON accept header
+        if (!manifestData) {
+          try {
+            const directResponse = await fetch(`${arweaveGateway}/${txId}`, {
+              headers: { 'Accept': 'application/json, text/json' }
+            });
+            if (directResponse.ok) {
+              const contentType = directResponse.headers.get('content-type') || '';
+              const text = await directResponse.text();
+              
+              // Check if we got HTML instead of JSON
+              if (text.trim().startsWith('<!DOCTYPE') || text.trim().startsWith('<html') || text.trim().startsWith('<!doctype')) {
+                console.log('Received HTML, trying transaction endpoint...');
+                // Method 3: Try transaction endpoint (if gateway supports it)
+                try {
+                  // For arweave.net, try /tx/{txid} endpoint
+                  if (arweaveGateway.includes('arweave.net')) {
+                    const txResponse = await fetch(`https://arweave.net/tx/${txId}/data`, {
+                      headers: { 'Accept': 'application/json' }
+                    });
+                    if (txResponse.ok) {
+                      manifestData = await txResponse.json();
+                      console.log('Fetched manifest via /tx/{id}/data endpoint');
+                    }
+                  } else {
+                    // For other gateways, try /tx/{txid} or similar
+                    const txResponse = await fetch(`${arweaveGateway}/tx/${txId}/data`, {
+                      headers: { 'Accept': 'application/json' }
+                    });
+                    if (txResponse.ok) {
+                      manifestData = await txResponse.json();
+                      console.log('Fetched manifest via /tx/{id}/data endpoint');
+                    }
+                  }
+                } catch (e) {
+                  lastError = e;
+                }
+              } else if (contentType.includes('json') || text.trim().startsWith('{') || text.trim().startsWith('[')) {
+                // It looks like JSON
+                manifestData = JSON.parse(text);
+                console.log('Fetched manifest via direct TXID (parsed as JSON)');
+              }
+            }
+          } catch (e) {
+            lastError = e;
+          }
+        }
+        
+        // Method 4: Try fetching metadata.json directly from manifest path
+        if (!manifestData) {
+          // Last resort: try to fetch metadata.json directly assuming the TXID is a manifest
+          // This won't work but gives a clearer error
+          try {
+            const metadataPathResponse = await fetch(`${arweaveGateway}/${txId}/metadata.json`);
+            if (metadataPathResponse.ok) {
+              const contentType = metadataPathResponse.headers.get('content-type') || '';
+              if (contentType.includes('json')) {
+                // It's metadata.json directly, not a manifest
+                const metadata = await metadataPathResponse.json();
+                console.log('Fetched metadata.json directly (not a manifest)');
+                return metadata;
+              }
+            }
+          } catch (e) {
+            lastError = e;
+          }
+        }
+        
+        if (!manifestData) {
+          throw new Error(`Unable to fetch manifest or metadata for TXID ${txId}. The gateway may be serving HTML instead of JSON. Try using arweave.net/${txId} directly to verify the transaction exists.`);
+        }
         
         // Check if it's a manifest (has manifest and paths)
         if (manifestData.manifest === 'arweave/paths' && manifestData.paths && manifestData.paths['metadata.json']) {
@@ -548,12 +793,19 @@
           console.log(`Found manifest, metadata TXID: ${metadataTxId}`);
           
           // Fetch metadata.json from manifest
-          const metadataResponse = await fetch(`${arweaveGateway}/${metadataTxId}`);
+          const metadataResponse = await fetch(`${arweaveGateway}/${metadataTxId}`, {
+            headers: { 'Accept': 'application/json' }
+          });
           if (!metadataResponse.ok) {
-            throw new Error(`Failed to fetch metadata: ${metadataTxId}`);
+            throw new Error(`Failed to fetch metadata: ${metadataTxId} (HTTP ${metadataResponse.status})`);
           }
           
-          return await metadataResponse.json();
+          const metadataText = await metadataResponse.text();
+          try {
+            return JSON.parse(metadataText);
+          } catch (e) {
+            throw new Error(`Invalid JSON in metadata file: ${metadataTxId}`);
+          }
         } else {
           // Assume it's metadata.json directly
           console.log(`Treating as direct metadata.json`);
@@ -637,6 +889,76 @@
         loadButton.textContent = 'Load Archive';
       }
     }
+    
+    // Lightbox functions
+    function openLightbox(src, type, alt) {
+      const lightbox = document.getElementById('lightbox');
+      const lightboxImg = document.getElementById('lightbox-img');
+      const lightboxVideo = document.getElementById('lightbox-video');
+      const lightboxVideoSourceMp4 = document.getElementById('lightbox-video-source-mp4');
+      const lightboxVideoSourceWebm = document.getElementById('lightbox-video-source-webm');
+      
+      if (type === 'video') {
+        lightboxImg.style.display = 'none';
+        lightboxVideo.style.display = 'block';
+        
+        // Clear previous sources
+        lightboxVideoSourceMp4.src = '';
+        lightboxVideoSourceWebm.src = '';
+        lightboxVideo.load(); // Clear the video element
+        
+        // Set new sources
+        lightboxVideoSourceMp4.src = src;
+        lightboxVideoSourceWebm.src = src;
+        
+        // Reload with new sources
+        lightboxVideo.load();
+        
+        // Try to play (may require user interaction on some browsers)
+        lightboxVideo.play().catch(err => {
+          console.log('Autoplay prevented, user will need to click play:', err);
+        });
+      } else {
+        lightboxImg.style.display = 'block';
+        lightboxVideo.style.display = 'none';
+        // Pause video if it was playing
+        lightboxVideo.pause();
+        lightboxImg.src = src;
+        lightboxImg.alt = alt;
+      }
+      
+      lightbox.classList.add('active');
+      document.body.style.overflow = 'hidden';
+    }
+    
+    function closeLightbox(event) {
+      // Don't close if clicking on the content itself (img or video)
+      if (event.target.classList.contains('lightbox-content')) {
+        return;
+      }
+      
+      const lightbox = document.getElementById('lightbox');
+      const lightboxVideo = document.getElementById('lightbox-video');
+      
+      lightbox.classList.remove('active');
+      document.body.style.overflow = '';
+      
+      // Pause video if playing
+      if (lightboxVideo) {
+        lightboxVideo.pause();
+        lightboxVideo.currentTime = 0;
+      }
+    }
+    
+    // Close lightbox on Escape key
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') {
+        const lightbox = document.getElementById('lightbox');
+        if (lightbox && lightbox.classList.contains('active')) {
+          closeLightbox({ target: lightbox, stopPropagation: () => {} });
+        }
+      }
+    });
     
     // Allow Enter key to trigger load
     document.addEventListener('DOMContentLoaded', () => {

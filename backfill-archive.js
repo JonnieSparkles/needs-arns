@@ -8,6 +8,7 @@ import fs from 'fs';
 import { createMentionArchive, buildMetadataObject, updateMentionArchive } from './lib/archive.js';
 import { uploadToArweave, uploadManifest, getTurboClient } from './lib/arweave.js';
 import { generateManifest } from './lib/manifest.js';
+import { getMediaUrls } from './lib/media.js';
 import { updateUndernameRecord } from './lib/arns.js';
 import { requireEnv, getJwkFromEnv } from './lib/utils.js';
 
@@ -89,7 +90,7 @@ async function backfillArchive() {
         console.log(`\n${'='.repeat(70)}`);
         console.log(`Processing mention ${processedCount + 1}/${successfulMentionIds.length}: ${mentionId}`);
         console.log(`Undername: ${details.undername}`);
-        console.log(`Username: ${details.username}`);
+        console.log(`Mention Username: ${details.mentionUsername || details.username || 'unknown'}`);
         
         // Check if already backfilled
         if (fs.existsSync(`archive/mentions/${mentionId}.json`)) {
@@ -127,18 +128,37 @@ async function backfillArchive() {
         const mentionUser = includes?.users?.find(u => u.id === mention.author_id);
         const parentUser = includes?.users?.find(u => u.id === parent.author_id);
         
-        // Build media array from existing data (media already on Arweave)
-        const mediaArray = details.isUploadedMedia ? [{
-          index: 0,
-          type: 'photo', // Assume photo if not specified
-          txId: details.txId,
-          alt_text: ''
-        }] : [{
-          index: 0,
-          type: 'link',
-          txId: details.txId,
-          alt_text: 'Existing Arweave content'
-        }];
+        // Detect media type properly from Twitter API response
+        let mediaArray = [];
+        if (details.isUploadedMedia) {
+          // Media was uploaded - detect type from Twitter API
+          const mediaUrls = await getMediaUrls(parent, includes);
+          if (mediaUrls.length > 0) {
+            // Use the detected type from Twitter API, but keep the existing txId
+            mediaArray = mediaUrls.map((media, index) => ({
+              index,
+              type: media.type, // Use detected type (video, photo, animated_gif, etc.)
+              txId: details.txId, // Keep existing txId (media already uploaded)
+              alt_text: media.alt_text || ''
+            }));
+          } else {
+            // Fallback: couldn't detect from API, assume photo
+            mediaArray = [{
+              index: 0,
+              type: 'photo',
+              txId: details.txId,
+              alt_text: ''
+            }];
+          }
+        } else {
+          // Link to existing Arweave content
+          mediaArray = [{
+            index: 0,
+            type: 'link',
+            txId: details.txId,
+            alt_text: 'Existing Arweave content'
+          }];
+        }
         
         // Build metadata object
         const metadataObj = buildMetadataObject(mention, parent, mentionUser, parentUser, mediaArray, includes);
