@@ -4,11 +4,12 @@
 
 All core functionality has been implemented for the tweet replica archive system. The bot now creates complete, self-contained tweet replicas on Arweave with Arweave manifests.
 
+**Note:** `TEMPLATE_HTML_TXID` is now required - the bot will throw an error if not set. Upload `templates/tweet-replica-template.html` to Arweave first and set the transaction ID in your environment.
+
 ## 📁 Files Created
 
 ### Core Modules
 - **`lib/manifest.js`** - Generates Arweave manifests using `arweave/paths` v0.2.0 schema
-- **`lib/html-generator.js`** - Creates tweet replica HTML with Twitter-like styling and media grid
 - **`lib/archive.js`** - Completely rewritten for individual file-based archives
 - **`backfill-archive.js`** - Script to backfill existing mentions (no re-uploads or re-assignments)
 
@@ -38,7 +39,6 @@ All core functionality has been implemented for the tweet replica archive system
 
 ### Imports
 - Added `generateManifest` from `lib/manifest.js`
-- Added `generateTweetHTML` from `lib/html-generator.js`
 - Updated archive imports to use new functions
 
 ## 🎯 How It Works Now
@@ -47,7 +47,7 @@ All core functionality has been implemented for the tweet replica archive system
 
 1. **Upload all media** - Every image/video in the parent tweet is uploaded to Arweave
 2. **Create metadata.json** - Complete Twitter context preserved
-3. **Generate index.html** - Tweet replica with all media, styled like Twitter
+3. **Use HTML template** - Shared template for consistent tweet replica display
 4. **Create Arweave manifest** - Bundles everything together
 5. **Assign ArNS** - Points to the manifest (not individual files)
 6. **Save individual archive** - Creates `archive/mentions/{mentionId}.json`

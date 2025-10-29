@@ -25,7 +25,6 @@
 
 ### Files Ready:
 - ✅ `lib/manifest.js` - Arweave manifest generator
-- ✅ `lib/html-generator.js` - Tweet replica HTML
 - ✅ `lib/archive.js` - Individual file archives
 - ✅ `lib/media.js` - Multi-media processing
 - ✅ `index.js` - Main handler updated

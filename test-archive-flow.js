@@ -8,7 +8,6 @@ import { getJwkFromEnv, requireEnv, verifyTxIdExists } from './lib/utils.js';
 import { extractTxIdFromTweetData, hasMediaAttachments, processMediaFromTweet } from './lib/media.js';
 import { uploadToArweave, uploadManifest, getTurboClient } from './lib/arweave.js';
 import { generateManifest } from './lib/manifest.js';
-import { generateTweetHTML } from './lib/html-generator.js';
 import { buildMetadataObject, createMentionArchive } from './lib/archive.js';
 import { checkUndernameAvailability } from './lib/arns.js';
 
@@ -62,7 +61,7 @@ const TWITTER_ACCESS_SECRET = requireEnv('TWITTER_ACCESS_SECRET');
 const ANT_PROCESS_ID = requireEnv('ANT_PROCESS_ID');
 const OWNER_ARNS_NAME = requireEnv('OWNER_ARNS_NAME');
 const DEFAULT_TTL_SECONDS = parseInt(process.env.DEFAULT_TTL_SECONDS || '60', 10);
-const TEMPLATE_HTML_TXID = process.env.TEMPLATE_HTML_TXID || null;
+const TEMPLATE_HTML_TXID = requireEnv('TEMPLATE_HTML_TXID');
 
 const twitter = new TwitterApi({
   appKey: TWITTER_APP_KEY,
@@ -172,7 +171,7 @@ async function testArchiveFlowForTweet(tweet, includes, twitterUrl, undername, i
     // Build metadata object
     console.log('📦 Building metadata object...');
     const mentionForMetadata = mentionTweet || parentTweet;
-    const metadataObj = buildMetadataObject(mentionForMetadata, parentTweet, mentionUser || parentUser, parentUser, mediaArray);
+    const metadataObj = buildMetadataObject(mentionForMetadata, parentTweet, mentionUser || parentUser, parentUser, mediaArray, includes);
     metadataObj.metadata.mentionId = mentionForMetadata.id;
     metadataObj.metadata.undername = undername;
     metadataObj.metadata.processedAt = new Date().toISOString();
@@ -188,23 +187,9 @@ async function testArchiveFlowForTweet(tweet, includes, twitterUrl, undername, i
     );
     console.log(`✅ Metadata uploaded: ${metadataTxId}\n`);
     
-    // Generate and upload HTML (or use template)
-    let htmlTxId;
-    if (TEMPLATE_HTML_TXID) {
-      console.log(`📄 Using shared HTML template: ${TEMPLATE_HTML_TXID}`);
-      htmlTxId = TEMPLATE_HTML_TXID;
-    } else {
-      console.log('📄 Generating tweet replica HTML...');
-      const html = generateTweetHTML(metadataObj.mentionTweet, metadataObj.parentTweet, mediaArray);
-      console.log('📤 Uploading HTML to Arweave...');
-      htmlTxId = await uploadToArweave(
-        Buffer.from(html),
-        'text/html',
-        'NeedsArNS-HTML',
-        jwk
-      );
-      console.log(`✅ HTML uploaded: ${htmlTxId}\n`);
-    }
+    // Use shared HTML template
+    console.log(`📄 Using shared HTML template: ${TEMPLATE_HTML_TXID}`);
+    const htmlTxId = TEMPLATE_HTML_TXID;
     
     // Create and upload manifest
     console.log('📦 Creating Arweave manifest...');

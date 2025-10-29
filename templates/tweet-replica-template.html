@@ -325,19 +325,30 @@
     
     // Render tweet from metadata
     function renderTweet(metadata) {
-      const { mentionTweet, parentTweet, archive } = metadata;
+      const { rawApiResponse, archive } = metadata;
+      const mentionTweet = rawApiResponse.mentionTweet;
+      const parentTweet = rawApiResponse.parentTweet;
+      const includes = rawApiResponse.includes || {};
       
-      const tweetDate = formatDate(parentTweet.created_at);
+      // Extract fields from raw API response
+      const parentUsername = includes.users?.find(u => u.id === parentTweet.author_id)?.username || 'unknown';
+      const mentionUsername = includes.users?.find(u => u.id === mentionTweet.author_id)?.username || 'unknown';
+      const parentText = parentTweet.text || '';
+      const parentCreatedAt = parentTweet.created_at || new Date().toISOString();
+      const mentionCreatedAt = mentionTweet.created_at || new Date().toISOString();
+      const parentEntities = parentTweet.entities || null;
+      
+      const tweetDate = formatDate(parentCreatedAt);
       const mediaHTML = generateMediaGrid(archive.media);
-      const requestDate = new Date(mentionTweet.created_at).toLocaleString('en-US');
+      const requestDate = new Date(mentionCreatedAt).toLocaleString('en-US');
       
       // Expand URLs in tweet text
-      const expandedText = expandUrls(parentTweet.text, parentTweet.entities);
+      const expandedText = expandUrls(parentText, parentEntities);
       
       const html = `
         <div class="tweet-header">
           <div class="user-info">
-            <span class="username">@${escapeHtml(parentTweet.user_name)}</span>
+            <span class="username">@${escapeHtml(parentUsername)}</span>
           </div>
           <span class="date">${tweetDate}</span>
         </div>
@@ -349,7 +360,7 @@
         <div class="archive-footer">
           <div>🏛️ Archived on Arweave via <a href="https://twitter.com/NeedsArNS" target="_blank">@NeedsArNS</a></div>
           <div class="request-info">
-            <strong>Requested by:</strong> @${escapeHtml(mentionTweet.user_name)}<br>
+            <strong>Requested by:</strong> @${escapeHtml(mentionUsername)}<br>
             <strong>Archived:</strong> ${requestDate}
           </div>
         </div>
@@ -359,7 +370,7 @@
       document.getElementById('tweet-content').style.display = 'block';
       
       // Update page title and meta description
-      document.title = `Tweet Archive - @${parentTweet.user_name}`;
+      document.title = `Tweet Archive - @${parentUsername}`;
       document.querySelector('meta[name="description"]').setAttribute('content', escapeHtml(expandedText));
     }
     

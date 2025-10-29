@@ -8,7 +8,6 @@ import fs from 'fs';
 import { createMentionArchive, buildMetadataObject, updateMentionArchive } from './lib/archive.js';
 import { uploadToArweave, uploadManifest, getTurboClient } from './lib/arweave.js';
 import { generateManifest } from './lib/manifest.js';
-import { generateTweetHTML } from './lib/html-generator.js';
 import { updateUndernameRecord } from './lib/arns.js';
 import { requireEnv, getJwkFromEnv } from './lib/utils.js';
 
@@ -28,7 +27,7 @@ const twitter = new TwitterApi({
 const ANT_PROCESS_ID = requireEnv('ANT_PROCESS_ID');
 const OWNER_ARNS_NAME = requireEnv('OWNER_ARNS_NAME');
 const DEFAULT_TTL_SECONDS = parseInt(process.env.DEFAULT_TTL_SECONDS || '60', 10);
-const TEMPLATE_HTML_TXID = process.env.TEMPLATE_HTML_TXID || null;
+const TEMPLATE_HTML_TXID = requireEnv('TEMPLATE_HTML_TXID');
 const jwk = getJwkFromEnv();
 const signer = new ArweaveSigner(jwk);
 const ant = ANT.init({ processId: ANT_PROCESS_ID, signer });
@@ -142,7 +141,7 @@ async function backfillArchive() {
         }];
         
         // Build metadata object
-        const metadataObj = buildMetadataObject(mention, parent, mentionUser, parentUser, mediaArray);
+        const metadataObj = buildMetadataObject(mention, parent, mentionUser, parentUser, mediaArray, includes);
         metadataObj.metadata.mentionId = mentionId;
         metadataObj.metadata.undername = details.undername;
         metadataObj.metadata.processedAt = details.timestamp;
@@ -157,22 +156,9 @@ async function backfillArchive() {
         );
         console.log(`✅ Metadata uploaded: ${metadataTxId}`);
         
-        // Generate and upload index.html (or use template)
-        let htmlTxId;
-        if (TEMPLATE_HTML_TXID) {
-          console.log('📄 Using shared HTML template...');
-          htmlTxId = TEMPLATE_HTML_TXID;
-        } else {
-          console.log('📄 Generating tweet replica HTML...');
-          const html = generateTweetHTML(metadataObj.mentionTweet, metadataObj.parentTweet, mediaArray);
-          htmlTxId = await uploadToArweave(
-            Buffer.from(html),
-            'text/html',
-            'NeedsArNS-HTML',
-            jwk
-          );
-          console.log(`✅ HTML uploaded: ${htmlTxId}`);
-        }
+        // Use shared HTML template
+        console.log('📄 Using shared HTML template...');
+        const htmlTxId = TEMPLATE_HTML_TXID;
         
         // Create and upload manifest
         console.log('📦 Creating Arweave manifest...');

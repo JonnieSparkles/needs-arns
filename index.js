@@ -13,7 +13,6 @@ import { fetchParentTweet, fetchParentUser, isUserAllowed, extractCommandFromMen
 import { saveProcessedState, loadProcessedState } from './lib/state.js';
 import { renderTemplate } from './response-templates/loader.js';
 import { generateManifest } from './lib/manifest.js';
-import { generateTweetHTML } from './lib/html-generator.js';
 
 // ---------- config & env ----------
 
@@ -34,8 +33,8 @@ const {
 const ANT_PROCESS_ID = requireEnv('ANT_PROCESS_ID');
 const WALLET_ADDRESS = process.env.WALLET_ADDRESS || 'Unknown';
 
-// Template system (optional)
-const TEMPLATE_HTML_TXID = process.env.TEMPLATE_HTML_TXID || null;
+// Template system (required)
+const TEMPLATE_HTML_TXID = requireEnv('TEMPLATE_HTML_TXID');
 
 const DEFAULT_TTL_SECONDS = parseInt(process.env.DEFAULT_TTL_SECONDS || '60', 10); // 60 seconds minimum
 const POLL_INTERVAL_MINUTES = parseInt(process.env.POLL_INTERVAL_MINUTES || '16', 10); // 16 minutes for free plan (with buffer)
@@ -217,7 +216,7 @@ async function handleMention(twitterClient, mention, includes) {
     }
 
     // Build metadata object
-    const metadataObj = buildMetadataObject(mention, parent, mentionUser, parentUser, mediaArray);
+    const metadataObj = buildMetadataObject(mention, parent, mentionUser, parentUser, mediaArray, includes);
     metadataObj.metadata.undername = undername;
     
     // Upload metadata.json
@@ -230,22 +229,9 @@ async function handleMention(twitterClient, mention, includes) {
     );
     console.log(`✅ Metadata uploaded: ${metadataTxId}`);
     
-    // Generate and upload index.html (or use template)
-    let htmlTxId;
-    if (TEMPLATE_HTML_TXID) {
-      console.log('📄 Using shared HTML template...');
-      htmlTxId = TEMPLATE_HTML_TXID;
-    } else {
-      console.log('📄 Generating tweet replica HTML...');
-      const html = generateTweetHTML(metadataObj.mentionTweet, metadataObj.parentTweet, mediaArray);
-      htmlTxId = await uploadToArweave(
-        Buffer.from(html),
-        'text/html',
-        'NeedsArNS-HTML',
-        jwk
-      );
-      console.log(`✅ HTML uploaded: ${htmlTxId}`);
-    }
+    // Use shared HTML template
+    console.log('📄 Using shared HTML template...');
+    const htmlTxId = TEMPLATE_HTML_TXID;
     
     // Create and upload manifest
     console.log('📦 Creating Arweave manifest...');

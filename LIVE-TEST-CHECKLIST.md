@@ -29,7 +29,7 @@ DEFAULT_TTL_SECONDS=60
 ARWEAVE_JWK_JSON=  # OR ARWEAVE_JWK_B64
 
 # Optional
-TEMPLATE_HTML_TXID=  # If using shared template
+TEMPLATE_HTML_TXID=  # REQUIRED: Shared HTML template txId
 ALLOWED_USERS=  # Whitelist (comma-separated)
 ENABLE_RETWEETS=false
 MENTION_MAX_AGE_HOURS=24
