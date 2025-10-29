@@ -22,12 +22,54 @@ Built with enterprise-grade optimization, access control, monitoring, and **Turb
 
 **Note:** For posts with multiple images/videos, the bot processes only the **first media attachment** to keep the experience simple and predictable.
 
-### Archive System
-After each successful assignment, the bot automatically:
-1. 📚 **Updates Archive** - Adds the new record to `archive.json`
-2. 📤 **Uploads to Arweave** - Uploads the archive via Turbo SDK
-3. 🏷️ **Assigns ArNS** - Creates `archive_yourname.ar.io` pointing to the archive
-4. 🎨 **Public Gallery** - Homepage displays all archived content with rich metadata
+### Archive System v2.1
+
+After each successful assignment, the bot automatically creates a complete tweet replica archive on Arweave:
+
+1. 📤 **Upload Media** - Uploads all media files from the parent tweet to Arweave
+2. 📄 **Create Metadata** - Generates `metadata.json` with complete Twitter context
+3. 🎨 **Generate HTML** - Creates or uses shared HTML template for tweet replica display
+4. 📦 **Create Manifest** - Bundles everything with an Arweave manifest
+5. 🏷️ **Assign ArNS** - Points `undername_yourname.ar.io` to the manifest
+6. 💾 **Save Archive** - Creates individual mention file in `archive/mentions/{mentionId}.json`
+
+When someone visits `undername_yourname.ar.io`, Arweave serves the manifest which automatically loads the tweet replica with all media, text, and metadata preserved.
+
+**Archive Structure:**
+```
+archive/
+├── metadata/
+│   └── index.json          # Master index of all mentions
+└── mentions/
+    ├── {mentionId}.json    # Individual mention metadata files
+    └── ...
+```
+
+Each mention gets its own JSON file with complete Twitter data, and the master index provides quick lookups across all archived mentions.
+
+**Arweave Manifest:**
+Each tweet replica uses an Arweave manifest (arweave/paths v0.2.0) that bundles all content:
+- `index.html` - The tweet replica HTML (shared template or individual)
+- `metadata.json` - Complete Twitter context and archive metadata
+- `media/{index}.{ext}` - All media files from the tweet
+
+**Template System:**
+The archive supports a shared HTML template for efficiency:
+- **With template** (`TEMPLATE_HTML_TXID`): Uploads only `metadata.json` + `manifest.json` (2 files, ~3KB)
+- **Without template**: Uploads `metadata.json` + `index.html` + `manifest.json` (3 files, ~8KB)
+
+The template fetches `metadata.json` and dynamically renders the tweet replica, providing 62% data reduction and easier global styling updates.
+
+**Backfill Existing Mentions:**
+```bash
+node backfill-archive.js 5
+```
+
+The backfill script efficiently processes existing mentions by:
+- Using Twitter's batch API to fetch all mentions in one call
+- Reusing existing media txIds (no re-upload)
+- Creating complete tweet replicas with manifests
+- Skipping already-processed mentions
 
 ### Example Flows
 
@@ -118,15 +160,16 @@ npm run manual
 ```
 
 **Interactive features:**
-- 📁 **Local file upload** - Upload files from your computer
-- 🌐 **URL download** - Download and upload from any URL
-- 🔗 **Existing TXID** - Assign existing Arweave transaction IDs
-- 📱 **Tweet extraction** - Extract media from tweet URLs (uses read quota)
+- 📁 **Local file upload** - Upload files from your computer to create tweet replicas
+- 🌐 **URL download** - Download and upload from any URL to create tweet replicas
+- 📱 **Tweet extraction** - Extract media from tweet URLs (uses read quota) for tweet replicas
 - 👤 **Username detection** - Auto-extract usernames from tweet URLs
 - 📝 **Reply preview** - Preview messages before sending
-- 🔄 **Archive integration** - Updates both local and Arweave archives
+- 🔄 **Full archive mode** - Always creates complete tweet replica archives (requires `TEMPLATE_HTML_TXID`)
 - 📊 **Processed mentions** - Updates bot state to prevent reprocessing
 - 🔧 **Shared utilities** - Uses same codebase as main bot for consistency
+
+**Note:** Manual mode always creates full tweet replica archives (manifest + metadata + HTML template). The `TEMPLATE_HTML_TXID` environment variable is required.
 
 ### Turbo Credits (for Media Uploads)
 
@@ -298,12 +341,15 @@ The codebase uses a clean, modular architecture with shared utilities:
 - ✅ **Undername Validation** - Enforces ArNS naming rules (1-51 chars, a-z, 0-9, -, _)
 - ✅ **Friendly Denial Messages** - Polite responses for unauthorized users
 
-### Archive System
-- ✅ **Live Archive** - Automatically maintains a public archive of all successfully assigned content
-- ✅ **Auto-Upload** - Archive gets uploaded to Arweave and assigned to `archive_yourname.ar.io`
-- ✅ **Rich Metadata** - Includes username, timestamp, media type, and ArNS URLs
-- ✅ **Public Gallery** - Homepage displays all archived content with image previews
-- ✅ **Real-time Updates** - Archive updates automatically with every successful assignment
+### Archive System v2.1
+- ✅ **Tweet Replicas** - Creates complete, self-contained tweet replicas on Arweave with all media
+- ✅ **Individual Files** - Each mention gets its own JSON file in `archive/mentions/` for scalability
+- ✅ **Master Index** - Centralized index in `archive/metadata/index.json` for quick lookups
+- ✅ **Arweave Manifests** - Uses arweave/paths v0.2.0 manifest format for proper bundling
+- ✅ **Template System** - Shared HTML template reduces data by 62% when configured
+- ✅ **Complete Preservation** - Full tweet text, media with alt text, timestamps, and metadata
+- ✅ **Multi-Media Support** - Handles 1-4 images/videos per tweet with responsive grid layouts
+- ✅ **Backfill Support** - Script to migrate existing mentions to new archive structure
 
 ### Development & Monitoring
 - ✅ **Enhanced Logging** - Detailed console output with emojis for easy debugging

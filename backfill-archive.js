@@ -170,14 +170,15 @@ async function backfillArchive() {
         );
         console.log(`✅ Manifest uploaded: ${manifestTxId}`);
         
-        // Update ArNS record to point to manifest (COMMENTED OUT FOR FIRST PASS)
-        console.log(`🔗 Would update ArNS: ${details.undername} → ${manifestTxId} (skipped for testing)`);
-        // const updateResult = await updateUndernameRecord(ant, details.undername, manifestTxId, DEFAULT_TTL_SECONDS);
-        // if (updateResult.success) {
-        //   console.log(`✅ ArNS updated: ${updateResult.recordId}`);
-        // } else {
-        //   console.warn(`⚠️ ArNS update failed (might already exist): ${updateResult.message}`);
-        // }
+        // Update ArNS record to point to manifest
+        console.log(`🔗 Updating ArNS: ${details.undername} → ${manifestTxId}`);
+        const updateResult = await updateUndernameRecord(ant, details.undername, manifestTxId, DEFAULT_TTL_SECONDS);
+        if (updateResult.success) {
+          console.log(`✅ ArNS updated: ${updateResult.recordId}`);
+          metadataObj.archive.arnsRecordId = updateResult.recordId;
+        } else {
+          console.warn(`⚠️ ArNS update failed (might already exist): ${updateResult.message}`);
+        }
         
         // Update metadata object with final ArNS info
         metadataObj.archive.htmlTxId = htmlTxId;
