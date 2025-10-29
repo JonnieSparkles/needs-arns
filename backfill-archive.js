@@ -52,7 +52,10 @@ async function backfillArchive() {
     const successfulMentionIds = Object.entries(processedDetails)
       .filter(([id, details]) => details.success === true)
       .slice(0, LIMIT)
-      .map(([id, details]) => ({ id, details }));
+      .map(([id, details]) => ({ id, details }))
+      .filter((mention, index, array) => 
+        array.findIndex(m => m.id === mention.id) === index
+      ); // Remove duplicates
     
     console.log(`📊 Found ${successfulMentionIds.length} successful mentions to backfill\n`);
     

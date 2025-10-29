@@ -212,11 +212,29 @@
       mediaArray.slice(0, 4).forEach((media, index) => {
         const spanFull = (count === 3 && index === 0) ? ' span-full' : '';
         
-        if (media.type === 'photo' || media.type === 'link') {
-          // Treat 'link' type as photo (existing Arweave content)
+        if (media.type === 'photo') {
           mediaItems += `
           <div class="media-item${spanFull}">
             <img src="${arweaveGateway}/${media.txId}" alt="${escapeHtml(media.alt_text || 'Image')}">
+          </div>`;
+        } else if (media.type === 'link') {
+          // Smart preview for link type content
+          mediaItems += `
+          <div class="media-item${spanFull}">
+            <div style="position: relative; width: 100%; height: 300px; background: #1c2938; border-radius: 8px; display: flex; align-items: center; justify-content: center;">
+              <img src="${arweaveGateway}/${media.txId}" 
+                   style="max-width: 100%; max-height: 100%; object-fit: contain;"
+                   alt="${escapeHtml(media.alt_text || 'Content preview')}"
+                   onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';">
+              <div style="display: none; flex-direction: column; align-items: center; gap: 12px;">
+                <div style="font-size: 48px;">📄</div>
+                <p style="color: #8b98a5;">Content Preview</p>
+                <a href="${arweaveGateway}/${media.txId}" target="_blank" 
+                   style="color: #1d9bf0; text-decoration: none; padding: 8px 16px; border: 1px solid #1d9bf0; border-radius: 4px;">
+                  View Full Content
+                </a>
+              </div>
+            </div>
           </div>`;
         } else if (media.type === 'video' || media.type === 'animated_gif') {
           mediaItems += `
@@ -232,6 +250,26 @@
       return `<div class="media-grid ${gridClass}">${mediaItems}</div>`;
     }
     
+    // Replace t.co links with expanded URLs
+    function expandUrls(text, entities) {
+      if (!entities?.urls || entities.urls.length === 0) {
+        return text;
+      }
+      
+      let expandedText = text;
+      
+      // Replace each t.co URL with its expanded version
+      entities.urls.forEach(urlEntity => {
+        const tcoUrl = urlEntity.url;
+        const expandedUrl = urlEntity.expanded_url;
+        
+        // Replace t.co URL with expanded URL in the text
+        expandedText = expandedText.replace(tcoUrl, expandedUrl);
+      });
+      
+      return expandedText;
+    }
+    
     // Render tweet from metadata
     function renderTweet(metadata) {
       const { mentionTweet, parentTweet, archive } = metadata;
@@ -239,6 +277,9 @@
       const tweetDate = formatDate(parentTweet.created_at);
       const mediaHTML = generateMediaGrid(archive.media);
       const requestDate = new Date(mentionTweet.created_at).toLocaleString('en-US');
+      
+      // Expand URLs in tweet text
+      const expandedText = expandUrls(parentTweet.text, parentTweet.entities);
       
       const html = `
         <div class="tweet-header">
@@ -248,7 +289,7 @@
           <span class="date">${tweetDate}</span>
         </div>
         
-        <div class="tweet-text">${escapeHtml(parentTweet.text)}</div>
+        <div class="tweet-text">${escapeHtml(expandedText)}</div>
         
         ${mediaHTML}
         
@@ -266,7 +307,7 @@
       
       // Update page title and meta description
       document.title = `Tweet Archive - @${parentTweet.user_name}`;
-      document.querySelector('meta[name="description"]').setAttribute('content', escapeHtml(parentTweet.text));
+      document.querySelector('meta[name="description"]').setAttribute('content', escapeHtml(expandedText));
     }
     
     // Load and render metadata
