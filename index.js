@@ -5,13 +5,15 @@ import express from 'express';
 import fs from 'fs';
 import { requireEnv, getJwkFromEnv, isValidUndername, isInfrastructureErrorType, verifyTxIdExists, ARWEAVE_TXID_RE, ASSIGN_CMD_RE } from './lib/utils.js';
 import { uploadToArweave, downloadMedia, getTurboClient } from './lib/arweave.js';
-import { updateArchive } from './lib/archive.js';
+import { createMentionArchive, updateMentionArchive, buildMetadataObject } from './lib/archive.js';
 import { reply, retweet, getTwitterClient } from './lib/twitter.js';
 import { checkUndernameAvailability, createUndernameRecord } from './lib/arns.js';
 import { hasMediaAttachments, extractTxIdFromTweetData, getMediaUrls, processMediaFromTweet } from './lib/media.js';
-import { fetchParentTweet, fetchParentUser, isUserAllowed, extractCommandFromMention, handleHelpCommand, handleAccessDenied, handleNameTaken, handleTxIdFailed, handleNoMedia, handleUploadFailed, handleNoContent, handleGeneralError, handleSuccess } from './lib/mentions.js';
+import { fetchParentTweet, fetchParentUser, isUserAllowed, extractCommandFromMention, handleHelpCommand, handleAccessDenied, handleNameTaken, handleTxIdFailed, handleNoMedia, handleUploadFailed, handleNoContent, handleGeneralError } from './lib/mentions.js';
 import { saveProcessedState, loadProcessedState } from './lib/state.js';
 import { renderTemplate } from './response-templates/loader.js';
+import { generateManifest } from './lib/manifest.js';
+import { generateTweetHTML } from './lib/html-generator.js';
 
 // ---------- config & env ----------
 
@@ -31,6 +33,9 @@ const {
 
 const ANT_PROCESS_ID = requireEnv('ANT_PROCESS_ID');
 const WALLET_ADDRESS = process.env.WALLET_ADDRESS || 'Unknown';
+
+// Template system (optional)
+const TEMPLATE_HTML_TXID = process.env.TEMPLATE_HTML_TXID || null;
 
 const DEFAULT_TTL_SECONDS = parseInt(process.env.DEFAULT_TTL_SECONDS || '60', 10); // 60 seconds minimum
 const POLL_INTERVAL_MINUTES = parseInt(process.env.POLL_INTERVAL_MINUTES || '16', 10); // 16 minutes for free plan (with buffer)
@@ -153,26 +158,39 @@ async function handleMention(twitterClient, mention, includes) {
     }
     console.log(`📝 Parent: ${parent.id}`);
 
-    // Check for existing Arweave links first (faster, cheaper)
-    let txId = extractTxIdFromTweetData(parent);
-    let isUploadedMedia = false;
+    // Get user data for metadata
+    const mentionUser = includes?.users?.find(u => u.id === mention.author_id);
+    const parentUser = includes?.users?.find(u => u.id === parent.author_id);
     
-    if (txId) {
+    // Determine content type and handle media/links
+    let mediaArray = [];
+    let isUploadedMedia = false;
+    let existingTxId = extractTxIdFromTweetData(parent);
+    
+    if (existingTxId) {
       // Handle existing Arweave link flow (PRIORITY)
-      console.log(`🔗 Found TXID: ${txId}`);
+      console.log(`🔗 Found existing TXID: ${existingTxId}`);
       
       // Verify existing TXID
-      const ok = await verifyTxIdExists(txId);
+      const ok = await verifyTxIdExists(existingTxId);
       if (!ok) {
-        console.log(`❌ TXID verification failed: ${txId}`);
-        await handleTxIdFailed(twitterClient, mention.id, txId);
+        console.log(`❌ TXID verification failed: ${existingTxId}`);
+        await handleTxIdFailed(twitterClient, mention.id, existingTxId);
         return;
       }
-      console.log(`✅ TXID verified: ${txId}`);
+      console.log(`✅ TXID verified: ${existingTxId}`);
+      
+      // Create metadata entry for existing link (no media upload)
+      mediaArray = [{
+        type: 'link',
+        txId: existingTxId,
+        alt_text: 'Existing Arweave content',
+        index: 0
+      }];
       
     } else if (hasMediaAttachments(parent)) {
-      // Fallback: Handle media upload flow
-      console.log(`📱 No Arweave link found, checking for media attachments`);
+      // Handle media upload flow
+      console.log(`📱 No Arweave link found, uploading media attachments`);
       
       const mediaResult = await processMediaFromTweet(parent, includes, (buffer, contentType) => 
         uploadToArweave(buffer, contentType, 'NeedsArNS-Bot', jwk)
@@ -187,8 +205,9 @@ async function handleMention(twitterClient, mention, includes) {
         return;
       }
       
-      txId = mediaResult.txId;
-      isUploadedMedia = mediaResult.isUploadedMedia;
+      mediaArray = mediaResult.media;
+      isUploadedMedia = true;
+      console.log(`✅ Uploaded ${mediaArray.length} media file(s)`);
       
     } else {
       // No Arweave link AND no media found
@@ -197,8 +216,51 @@ async function handleMention(twitterClient, mention, includes) {
       return;
     }
 
-    // Create ArNS record
-    const recordResult = await createUndernameRecord(ant, undername, txId, DEFAULT_TTL_SECONDS);
+    // Build metadata object
+    const metadataObj = buildMetadataObject(mention, parent, mentionUser, parentUser, mediaArray);
+    metadataObj.metadata.undername = undername;
+    
+    // Upload metadata.json
+    console.log('📄 Uploading metadata.json...');
+    const metadataTxId = await uploadToArweave(
+      Buffer.from(JSON.stringify(metadataObj, null, 2)), 
+      'application/json',
+      'NeedsArNS-Metadata',
+      jwk
+    );
+    console.log(`✅ Metadata uploaded: ${metadataTxId}`);
+    
+    // Generate and upload index.html (or use template)
+    let htmlTxId;
+    if (TEMPLATE_HTML_TXID) {
+      console.log('📄 Using shared HTML template...');
+      htmlTxId = TEMPLATE_HTML_TXID;
+    } else {
+      console.log('📄 Generating tweet replica HTML...');
+      const html = generateTweetHTML(metadataObj.mentionTweet, metadataObj.parentTweet, mediaArray);
+      htmlTxId = await uploadToArweave(
+        Buffer.from(html),
+        'text/html',
+        'NeedsArNS-HTML',
+        jwk
+      );
+      console.log(`✅ HTML uploaded: ${htmlTxId}`);
+    }
+    
+    // Create and upload manifest
+    console.log('📦 Creating Arweave manifest...');
+    const manifest = generateManifest(metadataTxId, mediaArray, htmlTxId);
+    const manifestTxId = await uploadToArweave(
+      Buffer.from(JSON.stringify(manifest, null, 2)),
+      'application/json',
+      'NeedsArNS-Manifest',
+      jwk
+    );
+    console.log(`✅ Manifest uploaded: ${manifestTxId}`);
+
+    // Create ArNS record pointing to manifest
+    console.log(`🔗 Assigning ArNS: ${undername} → ${manifestTxId}`);
+    const recordResult = await createUndernameRecord(ant, undername, manifestTxId, DEFAULT_TTL_SECONDS);
     if (!recordResult.success) {
       if (recordResult.error === 'undername_taken') {
         console.log(`❌ Undername '${undername}' is already taken`);
@@ -207,7 +269,6 @@ async function handleMention(twitterClient, mention, includes) {
         processedDetails[mention.id] = {
           username: username,
           undername: undername,
-          txId: txId,
           success: false,
           reason: 'undername_taken',
           timestamp: new Date().toISOString()
@@ -220,29 +281,49 @@ async function handleMention(twitterClient, mention, includes) {
     }
     
     const onchainId = recordResult.recordId;
+    console.log(`✅ ArNS record created: ${onchainId}`);
     
-    // Record successful assignment
+    // Update metadata object with final ArNS info
+    metadataObj.archive.htmlTxId = htmlTxId;
+    metadataObj.archive.manifestTxId = manifestTxId;
+    metadataObj.archive.arnsRecordId = onchainId;
+    metadataObj.archive.assignedAt = new Date().toISOString();
+    
+    // Save individual mention archive
+    await createMentionArchive(metadataObj);
+    
+    // Record successful assignment in processed state
     processedDetails[mention.id] = {
       username: username,
       undername: undername,
-      txId: txId,
+      txId: manifestTxId,
       onchainId: onchainId,
       isUploadedMedia: isUploadedMedia,
       success: true,
       timestamp: new Date().toISOString()
     };
-    
-    // Update archive with new record
-    await updateArchive({
-      username: username,
-      undername: undername,
-      txId: txId,
-      isUploadedMedia: isUploadedMedia,
-      timestamp: new Date().toISOString()
-    }, true, ant, OWNER_ARNS_NAME, DEFAULT_TTL_SECONDS, jwk);
 
-    // Send success reply
-    const replyTweetId = await handleSuccess(twitterClient, mention.id, undername, OWNER_ARNS_NAME, txId, isUploadedMedia);
+    // Send success reply with manifest txId
+    console.log('💬 Sending success reply...');
+    const templateType = 'success-tweet-replica';
+    const msg = renderTemplate(templateType, {
+      undername,
+      ownerArnsName: OWNER_ARNS_NAME,
+      manifestTxId
+    });
+    
+    if (!msg) {
+      const fallbackMsg = `🎉 ${undername}_${OWNER_ARNS_NAME}.ar.io → ${manifestTxId}`;
+      console.log('⚠️ Template loading failed, using fallback message');
+      const replyTweetId = await reply(twitterClient, mention.id, fallbackMsg);
+      return;
+    }
+    
+    // Wait 1 minute before replying
+    console.log('⏳ Waiting 1 minute before replying...');
+    await new Promise(resolve => setTimeout(resolve, 60000));
+    
+    const replyTweetId = await reply(twitterClient, mention.id, msg);
     
     // Retweet the success message to promote the archived content
     if (replyTweetId && ENABLE_RETWEETS) {
