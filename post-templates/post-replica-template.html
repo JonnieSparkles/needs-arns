@@ -454,6 +454,30 @@
       return 'ar.io';
     }
     
+    // Resolve ArNS name to get manifest TXID
+    async function getManifestTxIdFromResolver(undername, rootArnsName) {
+      try {
+        const gatewayHost = getArnsGatewayHost();
+        const resolverUrl = `https://${gatewayHost}/ar-io/resolver/${undername}_${rootArnsName}`;
+        
+        console.log('Resolving ArNS:', resolverUrl);
+        
+        const response = await fetch(resolverUrl, {
+          headers: { 'Accept': 'application/json' }
+        });
+        
+        if (!response.ok) {
+          throw new Error(`Resolver failed: ${response.status}`);
+        }
+        
+        const data = await response.json();
+        return data.txId || null;
+      } catch (error) {
+        console.error('Failed to resolve ArNS:', error);
+        return null;
+      }
+    }
+    
     // Escape HTML to prevent XSS
     function escapeHtml(text) {
       if (!text) return '';
@@ -667,6 +691,23 @@
       
       document.getElementById('tweet-content').innerHTML = html;
       document.getElementById('tweet-content').style.display = 'block';
+      
+      // Load TXID asynchronously for provenance trail
+      if (undername) {
+        getManifestTxIdFromResolver(undername, 'needsarns').then(manifestTxId => {
+          if (manifestTxId) {
+            const txidHtml = `<br><strong>txid:</strong> <a href="https://viewblock.io/arweave/tx/${manifestTxId}" target="_blank">${manifestTxId}</a>`;
+            
+            // Find the archive footer and append TXID
+            const archiveFooter = document.querySelector('.archive-footer .request-info');
+            if (archiveFooter) {
+              archiveFooter.innerHTML += txidHtml;
+            }
+          }
+        }).catch(error => {
+          console.error('Failed to resolve TXID:', error);
+        });
+      }
       
       // Update page title and meta description
       const pageTitle = `Post Archive - @${parentUsername}`;

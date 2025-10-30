@@ -469,49 +469,81 @@
         const BOT_CONFIG = {
             arnsName: arnsName,
             gatewayHost: gatewayHost,
-            archiveIndexUrl: `https://archive.${gatewayHost}`
+            archiveIndexUrl: `https://archive_${arnsName}.${gatewayHost}`
         };
         
         let archiveIndex = null;
         
         // Load archive index
         async function loadArchiveIndex() {
-            try {
-                console.log('Fetching archive index from:', BOT_CONFIG.archiveIndexUrl);
-                const response = await fetch(BOT_CONFIG.archiveIndexUrl);
-                
-                if (!response.ok) {
-                    throw new Error(`Archive index fetch failed: ${response.status}`);
+            let archiveData = null;
+            const gatewayBase = `https://${BOT_CONFIG.gatewayHost}`;
+            
+            // Helper function to try fetching archive index
+            // Since archive points directly to JSON (not a manifest), we need to get the raw transaction
+            // We can't use /raw/ without knowing the TXID, so we'll try to parse the response
+            async function tryFetchArchive(baseUrl) {
+                try {
+                    // Extract the transaction ID from the URL by checking if we can determine it
+                    // First try: Extract TXID from undername by resolving it or try /raw/ pattern
+                    // Since archive points to JSON directly, try /raw appended first
+                    try {
+                        // Try pattern: undername_url/raw (some gateways might support this)
+                        const rawUrl = `${baseUrl}/raw`;
+                        const rawResponse = await fetch(rawUrl, {
+                            headers: { 'Accept': 'application/json' }
+                        });
+                        if (rawResponse.ok) {
+                            const contentType = rawResponse.headers.get('content-type') || '';
+                            const text = await rawResponse.text();
+                            if (contentType.includes('json') || text.trim().startsWith('{') || text.trim().startsWith('[')) {
+                                if (!text.trim().startsWith('<!DOCTYPE') && !text.trim().startsWith('<html')) {
+                                    return JSON.parse(text);
+                                }
+                            }
+                        }
+                    } catch (e) {
+                        // Continue to direct fetch
+                    }
+                    
+                    // Method 2: Try direct fetch
+                    const directResponse = await fetch(baseUrl, {
+                        headers: { 'Accept': 'application/json' }
+                    });
+                    if (directResponse.ok) {
+                        const contentType = directResponse.headers.get('content-type') || '';
+                        const text = await directResponse.text();
+                        
+                        // Check if we got HTML instead of JSON
+                        if (text.trim().startsWith('<!DOCTYPE') || text.trim().startsWith('<html') || text.trim().startsWith('<!doctype')) {
+                            return null; // Got HTML, can't parse
+                        } else if (contentType.includes('json') || text.trim().startsWith('{') || text.trim().startsWith('[')) {
+                            return JSON.parse(text);
+                        }
+                    }
+                    return null;
+                } catch (e) {
+                    return null;
                 }
-                
-                archiveIndex = await response.json();
+            }
+            
+            // Try primary URL
+            console.log('Fetching archive index from:', BOT_CONFIG.archiveIndexUrl);
+            archiveData = await tryFetchArchive(BOT_CONFIG.archiveIndexUrl);
+            
+            // Try fallback to ar.io if failed and not already using ar.io
+            if (!archiveData && gatewayHost !== 'ar.io') {
+                console.log('Trying fallback to ar.io...');
+                archiveData = await tryFetchArchive(`https://archive_${arnsName}.ar.io`);
+            }
+            
+            if (archiveData) {
+                archiveIndex = archiveData;
                 console.log('Archive index loaded:', archiveIndex);
-                
-                // Render stats and feed
                 renderStats();
                 renderFeed();
-                
-            } catch (error) {
-                console.error('Error fetching archive index:', error);
-                
-                // Try fallback to ar.io
-                if (gatewayHost !== 'ar.io') {
-                    console.log('Trying fallback to ar.io...');
-                    try {
-                        const fallbackUrl = `https://archive.ar.io`;
-                        const fallbackResponse = await fetch(fallbackUrl);
-                        
-                        if (fallbackResponse.ok) {
-                            archiveIndex = await fallbackResponse.json();
-                            renderStats();
-                            renderFeed();
-                            return;
-                        }
-                    } catch (fallbackError) {
-                        console.error('Fallback also failed:', fallbackError);
-                    }
-                }
-                
+            } else {
+                console.error('Failed to fetch archive index from all sources');
                 document.getElementById('feedContainer').innerHTML = 
                     '<div class="error">Failed to load archive. Please try again later.</div>';
             }
@@ -564,16 +596,54 @@
         // Helper: Fetch manifest and extract metadata TXID
         async function fetchManifestMetadata(manifestTxId) {
             try {
-                const manifestUrl = `https://${BOT_CONFIG.gatewayHost}/${manifestTxId}`;
-                const manifestResponse = await fetch(manifestUrl, {
-                    headers: { 'Accept': 'application/json' }
-                });
+                const gatewayBase = `https://${BOT_CONFIG.gatewayHost}`;
+                let manifestData = null;
                 
-                if (!manifestResponse.ok) {
-                    throw new Error(`Manifest fetch failed: ${manifestResponse.status}`);
+                // Method 1: Try /raw/ path to get raw transaction data
+                try {
+                    const rawResponse = await fetch(`${gatewayBase}/raw/${manifestTxId}`, {
+                        headers: { 'Accept': 'application/json' }
+                    });
+                    if (rawResponse.ok) {
+                        const contentType = rawResponse.headers.get('content-type') || '';
+                        const text = await rawResponse.text();
+                        if (contentType.includes('json') || text.trim().startsWith('{') || text.trim().startsWith('[')) {
+                            manifestData = JSON.parse(text);
+                        }
+                    }
+                } catch (e) {
+                    // Continue to next method
                 }
                 
-                const manifestData = await manifestResponse.json();
+                // Method 2: Try /tx/{id}/data endpoint as fallback
+                if (!manifestData) {
+                    try {
+                        const txResponse = await fetch(`${gatewayBase}/tx/${manifestTxId}/data`, {
+                            headers: { 'Accept': 'application/json' }
+                        });
+                        if (txResponse.ok) {
+                            manifestData = await txResponse.json();
+                        }
+                    } catch (e) {
+                        // Try arweave.net as fallback if using different gateway
+                        if (BOT_CONFIG.gatewayHost !== 'arweave.net') {
+                            try {
+                                const arweaveNetResponse = await fetch(`https://arweave.net/tx/${manifestTxId}/data`, {
+                                    headers: { 'Accept': 'application/json' }
+                                });
+                                if (arweaveNetResponse.ok) {
+                                    manifestData = await arweaveNetResponse.json();
+                                }
+                            } catch (e2) {
+                                // Continue
+                            }
+                        }
+                    }
+                }
+                
+                if (!manifestData) {
+                    throw new Error('Unable to fetch manifest');
+                }
                 
                 // Check if it's a manifest (has manifest and paths)
                 if (manifestData.manifest === 'arweave/paths' && manifestData.paths && manifestData.paths['metadata.json']) {
@@ -590,16 +660,54 @@
         // Helper: Fetch metadata and extract media TXID for preview
         async function getPreviewMediaTxId(metadataTxId) {
             try {
-                const metadataUrl = `https://${BOT_CONFIG.gatewayHost}/${metadataTxId}`;
-                const metadataResponse = await fetch(metadataUrl, {
-                    headers: { 'Accept': 'application/json' }
-                });
+                const gatewayBase = `https://${BOT_CONFIG.gatewayHost}`;
+                let metadata = null;
                 
-                if (!metadataResponse.ok) {
-                    throw new Error(`Metadata fetch failed: ${metadataResponse.status}`);
+                // Method 1: Try /raw/ path to get raw transaction data
+                try {
+                    const rawResponse = await fetch(`${gatewayBase}/raw/${metadataTxId}`, {
+                        headers: { 'Accept': 'application/json' }
+                    });
+                    if (rawResponse.ok) {
+                        const contentType = rawResponse.headers.get('content-type') || '';
+                        const text = await rawResponse.text();
+                        if (contentType.includes('json') || text.trim().startsWith('{') || text.trim().startsWith('[')) {
+                            metadata = JSON.parse(text);
+                        }
+                    }
+                } catch (e) {
+                    // Continue to next method
                 }
                 
-                const metadata = await metadataResponse.json();
+                // Method 2: Try /tx/{id}/data endpoint as fallback
+                if (!metadata) {
+                    try {
+                        const txResponse = await fetch(`${gatewayBase}/tx/${metadataTxId}/data`, {
+                            headers: { 'Accept': 'application/json' }
+                        });
+                        if (txResponse.ok) {
+                            metadata = await txResponse.json();
+                        }
+                    } catch (e) {
+                        // Try arweave.net as fallback if using different gateway
+                        if (BOT_CONFIG.gatewayHost !== 'arweave.net') {
+                            try {
+                                const arweaveNetResponse = await fetch(`https://arweave.net/tx/${metadataTxId}/data`, {
+                                    headers: { 'Accept': 'application/json' }
+                                });
+                                if (arweaveNetResponse.ok) {
+                                    metadata = await arweaveNetResponse.json();
+                                }
+                            } catch (e2) {
+                                // Continue
+                            }
+                        }
+                    }
+                }
+                
+                if (!metadata) {
+                    throw new Error('Unable to fetch metadata');
+                }
                 
                 // Get first media item if available
                 if (metadata.archive && metadata.archive.media && metadata.archive.media.length > 0) {
@@ -630,10 +738,8 @@
                 .slice(0, 10);
             
             const html = await Promise.all(latest.map(async (mention) => {
-                // Use manifest TXID directly for faster loading (fallback to undername if missing)
-                const manifestUrl = mention.manifestTxId 
-                    ? `https://${BOT_CONFIG.gatewayHost}/${mention.manifestTxId}`
-                    : `https://${mention.undername}_${BOT_CONFIG.arnsName}.${BOT_CONFIG.gatewayHost}`;
+                // Always use ArNS undername URL for the view link
+                const manifestUrl = `https://${mention.undername}_${BOT_CONFIG.arnsName}.${BOT_CONFIG.gatewayHost}`;
                 const hasMedia = mention.mediaCount > 0;
                 
                 // Load manifest and metadata to get preview image
@@ -645,10 +751,10 @@
                     }
                 }
                 
-                // Construct preview URL from media TXID if available, otherwise use manifest URL
+                // Construct preview URL from media TXID if available
                 const previewUrl = previewMediaTxId 
                     ? `https://${BOT_CONFIG.gatewayHost}/${previewMediaTxId}`
-                    : (hasMedia ? manifestUrl : null);
+                    : null;
                 
                 return `
                     <div class="feed-item" onclick="window.open('${manifestUrl}', '_blank')">
