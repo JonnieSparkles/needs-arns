@@ -6,7 +6,7 @@ import path from 'path';
 import { ANT, ArweaveSigner } from '@ar.io/sdk';
 import { requireEnv, getJwkFromEnv } from '../lib/utils.js';
 import { uploadToArweave, uploadManifest } from '../lib/arweave.js';
-import { updateMentionArchive } from '../lib/archive.js';
+import { updateMentionArchive, uploadAndAssignArchiveIndex } from '../lib/archive.js';
 import { updateUndernameRecord } from '../lib/arns.js';
 import { generateManifest } from '../lib/manifest.js';
 
@@ -20,6 +20,7 @@ async function main() {
   const ANT_PROCESS_ID = requireEnv('ANT_PROCESS_ID');
   const DEFAULT_TTL_SECONDS = parseInt(process.env.DEFAULT_TTL_SECONDS || '60', 10);
   const TEMPLATE_HTML_TXID = requireEnv('TEMPLATE_HTML_TXID');
+  const ROOT_ARNS_NAME = process.env.ROOT_ARNS_NAME || 'needsarns';
 
   // Load existing archived mention
   const mentionFile = path.join('archive', 'mentions', `${mentionId}.json`);
@@ -99,14 +100,20 @@ async function main() {
   const ant = ANT.init({ signer: new ArweaveSigner(jwk), processId: ANT_PROCESS_ID });
 
   // Upload fresh metadata.json (based on current archived data)
-  console.log('📄 Uploading refreshed metadata.json...');
-  const metadataTxId = await uploadToArweave(
-    Buffer.from(JSON.stringify(mentionData, null, 2)),
-    'application/json',
-    'NeedsArNS-Metadata-Refresh',
-    jwk
-  );
-  console.log(`✅ Metadata uploaded: ${metadataTxId}`);
+  console.log('\n📄 Step 1: Uploading refreshed metadata.json...');
+  let metadataTxId;
+  try {
+    metadataTxId = await uploadToArweave(
+      Buffer.from(JSON.stringify(mentionData, null, 2)),
+      'application/json',
+      'NeedsArNS-Metadata-Refresh',
+      jwk
+    );
+    console.log(`✅ Metadata uploaded: ${metadataTxId}`);
+  } catch (error) {
+    console.error(`❌ Failed to upload metadata:`, error);
+    process.exit(1);
+  }
 
   // Use shared HTML template
   const htmlTxId = TEMPLATE_HTML_TXID;
@@ -115,21 +122,35 @@ async function main() {
   const mediaArray = Array.isArray(mentionData?.archive?.media) ? mentionData.archive.media : [];
 
   // Create and upload new manifest
-  console.log('📦 Creating new manifest...');
-  const manifest = generateManifest(metadataTxId, mediaArray, htmlTxId);
-  const manifestTxId = await uploadManifest(Buffer.from(JSON.stringify(manifest, null, 2)), jwk);
-  console.log(`✅ Manifest uploaded: ${manifestTxId}`);
+  console.log('\n📦 Step 2: Creating and uploading new manifest...');
+  let manifestTxId;
+  try {
+    const manifest = generateManifest(metadataTxId, mediaArray, htmlTxId);
+    manifestTxId = await uploadManifest(Buffer.from(JSON.stringify(manifest, null, 2)), jwk);
+    console.log(`✅ Manifest uploaded: ${manifestTxId}`);
+  } catch (error) {
+    console.error(`❌ Failed to upload manifest:`, error);
+    process.exit(1);
+  }
 
   // Update ArNS record to point to new manifest
-  console.log(`🔗 Updating ArNS: ${undername} → ${manifestTxId}`);
-  const updateResult = await updateUndernameRecord(ant, undername, manifestTxId, DEFAULT_TTL_SECONDS);
-  if (!updateResult.success) {
-    console.error(`❌ Failed to update ArNS: ${updateResult.message || updateResult.error}`);
+  console.log(`\n🔗 Step 3: Updating ArNS record: ${undername} → ${manifestTxId}`);
+  let updateResult;
+  try {
+    updateResult = await updateUndernameRecord(ant, undername, manifestTxId, DEFAULT_TTL_SECONDS);
+    if (!updateResult.success) {
+      console.error(`❌ Failed to update ArNS: ${updateResult.message || updateResult.error}`);
+      process.exit(1);
+    }
+    console.log(`✅ ArNS record updated successfully! Record ID: ${updateResult.recordId}`);
+  } catch (error) {
+    console.error(`❌ ArNS update error:`, error);
     process.exit(1);
   }
   const onchainId = updateResult.recordId;
 
   // Persist new TXIDs back into the mention archive
+  console.log(`\n💾 Step 4: Saving updated TXIDs to archive file...`);
   mentionData.archive = {
     ...mentionData.archive,
     htmlTxId,
@@ -141,12 +162,35 @@ async function main() {
   console.log(`✅ Updated ${mentionFile}`);
 
   // Refresh master index entry
+  console.log(`\n📊 Step 5: Refreshing master index...`);
   const ok = await updateMentionArchive(mentionId, {});
   if (!ok) {
     console.error('❌ Failed to refresh archive index');
     process.exit(1);
   }
-  console.log('✅ Archive index refreshed');
+  console.log('✅ Archive index refreshed locally');
+  
+  // Upload and update archive index on Arweave
+  console.log(`\n📤 Step 6: Uploading archive index to Arweave...`);
+  try {
+    const indexResult = await uploadAndAssignArchiveIndex(ant, jwk, ROOT_ARNS_NAME, DEFAULT_TTL_SECONDS);
+    if (!indexResult.success) {
+      console.warn(`⚠️ Failed to upload archive index: ${indexResult.message || indexResult.error}`);
+      console.warn(`   This is non-critical - the individual mention was refreshed successfully`);
+    } else {
+      console.log(`✅ Archive index uploaded: ${indexResult.txId}`);
+      console.log(`✅ Archive index ArNS updated: archive_${ROOT_ARNS_NAME}.ar.io`);
+    }
+  } catch (error) {
+    console.warn(`⚠️ Error uploading archive index:`, error.message);
+    console.warn(`   This is non-critical - the individual mention was refreshed successfully`);
+  }
+  
+  console.log(`\n🎉 Refresh complete!`);
+  console.log(`   Metadata TXID: ${metadataTxId}`);
+  console.log(`   Manifest TXID: ${manifestTxId}`);
+  console.log(`   ArNS Record ID: ${onchainId}`);
+  console.log(`   ArNS URL: https://${undername}_${ROOT_ARNS_NAME}.ar.io`);
 }
 
 main().catch(err => {
