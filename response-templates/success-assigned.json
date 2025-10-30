@@ -2,6 +2,7 @@
   "type": "success-assigned",
   "description": "Success message when existing link is assigned",
   "template": [
+    "{fallbackMessage}",
     "🎉 Success! Your content is now permanently named!",
     "",
     "🔗 Link assigned: {undername}",
@@ -12,7 +13,7 @@
     "",
     "✨ Powered by @ArNSdomains"
   ],
-  "variables": ["undername", "rootArnsName", "txId"],
+  "variables": ["undername", "rootArnsName", "txId", "fallbackMessage"],
   "maxLength": 280,
   "fallback": "success-assigned-truncated"
 }

@@ -2,6 +2,7 @@
   "type": "success-assigned-truncated",
   "description": "Truncated success message for assigned link when full message is too long",
   "template": [
+    "{fallbackMessage}",
     "🎉 Link assigned: {undername}",
     "",
     "🌐 https://{undername}_{rootArnsName}.ar.io",
@@ -9,7 +10,7 @@
     "",
     "✨ Powered by @ArNSdomains"
   ],
-  "variables": ["undername", "rootArnsName", "txId"],
+  "variables": ["undername", "rootArnsName", "txId", "fallbackMessage"],
   "maxLength": 280,
   "fallback": "success-minimal"
 }

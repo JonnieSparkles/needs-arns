@@ -2,6 +2,7 @@
   "type": "success-tweet-replica",
   "description": "Success message when tweet replica is created and archived",
   "template": [
+    "{fallbackMessage}",
     "🎉 Success! Your post is now permanently archived!",
     "",
     "📱 Post replica created: {undername}",
@@ -12,7 +13,7 @@
     "",
     "✨ Powered by @ArNSdomains"
   ],
-  "variables": ["undername", "rootArnsName", "manifestTxId"],
+  "variables": ["undername", "rootArnsName", "manifestTxId", "fallbackMessage"],
   "maxLength": 280,
   "fallback": "success-tweet-replica-truncated"
 }

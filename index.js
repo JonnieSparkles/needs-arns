@@ -107,27 +107,52 @@ async function handleMention(twitterClient, mention, includes) {
     
     // Help command removed
     
-    const undername = command.undername;
-    console.log(`🏷️ Undername: ${undername}`);
+    const requestedUndername = command.undername;
+    console.log(`🏷️ Requested undername: ${requestedUndername}`);
     
-    // Check if undername already exists BEFORE processing media
-    const availability = await checkUndernameAvailability(ant, undername);
-    if (!availability.available) {
-      console.log(`❌ Name taken: ${undername}`);
-      
-      // Record failed assignment (name taken)
-      processedDetails[mention.id] = {
-        mentionUsername: mentionUsername,
-        undername: undername,
-        success: false,
-        reason: 'undername_taken',
-        timestamp: new Date().toISOString()
-      };
-      
-      await handleNameTaken(twitterClient, mention.id, undername);
+    // Fetch parent tweet early (needed for fallback logic)
+    const parent = fetchParentTweet(includes, mention);
+    if (!parent) {
+      console.log(`❌ No parent tweet: ${mention.id}`);
       return;
     }
-    console.log(`✅ Name available: ${undername}`);
+    console.log(`📝 Parent: ${parent.id}`);
+    
+    // Check if requested undername already exists BEFORE processing media
+    let undername = requestedUndername;
+    let isFallback = false;
+    const availability = await checkUndernameAvailability(ant, undername);
+    if (!availability.available) {
+      console.log(`❌ Requested name taken: ${undername}`);
+      
+      // Try parent tweet ID as fallback undername
+      const fallbackUndername = parent.id;
+      console.log(`🔄 Trying fallback undername: ${fallbackUndername}`);
+      const fallbackAvailability = await checkUndernameAvailability(ant, fallbackUndername);
+      
+      if (!fallbackAvailability.available) {
+        console.log(`❌ Fallback name also taken: ${fallbackUndername}`);
+        
+        // Record failed assignment (name taken)
+        processedDetails[mention.id] = {
+          mentionUsername: mentionUsername,
+          undername: requestedUndername,
+          success: false,
+          reason: 'undername_taken',
+          timestamp: new Date().toISOString()
+        };
+        
+        await handleNameTaken(twitterClient, mention.id, requestedUndername);
+        return;
+      }
+      
+      // Use fallback undername
+      undername = fallbackUndername;
+      isFallback = true;
+      console.log(`✅ Using fallback undername: ${undername}`);
+    } else {
+      console.log(`✅ Requested name available: ${undername}`);
+    }
     
     // Check access control
     if (!isUserAllowed(mention, includes, ALLOWED_USERS)) {
@@ -142,14 +167,6 @@ async function handleMention(twitterClient, mention, includes) {
       await handleAccessDenied(twitterClient, mention.id, mentionUsername);
       return;
     }
-    
-    // We only act when the mention is in reply to a tweet (the parent should have the link)
-    const parent = fetchParentTweet(includes, mention);
-    if (!parent) {
-      console.log(`❌ No parent tweet: ${mention.id}`);
-      return;
-    }
-    console.log(`📝 Parent: ${parent.id}`);
 
     // Get user data for metadata
     const mentionUser = includes?.users?.find(u => u.id === mention.author_id);
@@ -250,18 +267,19 @@ async function handleMention(twitterClient, mention, includes) {
     const recordResult = await createUndernameRecord(ant, undername, manifestTxId, DEFAULT_TTL_SECONDS);
     if (!recordResult.success) {
       if (recordResult.error === 'undername_taken') {
-        console.log(`❌ Undername '${undername}' is already taken`);
+        console.log(`❌ Undername '${undername}' is already taken (race condition or fallback also taken)`);
         
         // Record failed assignment (name taken)
+        // Use requested name for error message (fallback case already handled earlier)
         processedDetails[mention.id] = {
           mentionUsername: mentionUsername,
-          undername: undername,
+          undername: requestedUndername,
           success: false,
           reason: 'undername_taken',
           timestamp: new Date().toISOString()
         };
         
-        await handleNameTaken(twitterClient, mention.id, undername);
+        await handleNameTaken(twitterClient, mention.id, requestedUndername);
         return;
       }
       throw new Error(recordResult.message);
@@ -293,14 +311,20 @@ async function handleMention(twitterClient, mention, includes) {
     // Send success reply with manifest txId
     console.log('💬 Sending success reply...');
     const templateType = 'success-tweet-replica';
-    const msg = renderTemplate(templateType, {
+    const templateVars = {
       undername,
       rootArnsName: ROOT_ARNS_NAME,
-      manifestTxId
-    });
+      manifestTxId,
+      fallbackMessage: isFallback ? `Requested name was taken. Assigned parent post ID '${parent.id}' instead.` : ''
+    };
+    
+    const msg = renderTemplate(templateType, templateVars);
     
     if (!msg) {
-      const fallbackMsg = `🎉 ${undername}_${ROOT_ARNS_NAME}.ar.io → ${manifestTxId}`;
+      let fallbackMsg = `🎉 ${undername}_${ROOT_ARNS_NAME}.ar.io → ${manifestTxId}`;
+      if (isFallback) {
+        fallbackMsg = `Requested name was taken. Assigned parent post ID '${parent.id}' instead.\n\n${fallbackMsg}`;
+      }
       console.log('⚠️ Template loading failed, using fallback message');
       const replyTweetId = await reply(twitterClient, mention.id, fallbackMsg);
       return;

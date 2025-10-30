@@ -55,10 +55,17 @@ export function renderTemplate(templateType, variables = {}) {
   try {
     // Render each line with variable substitution
     const renderedLines = template.template.map(line => {
-      return line.replace(/\{(\w+)\}/g, (match, varName) => {
-        return variables[varName] || match; // Keep original if variable not found
+      const originalLine = line;
+      const rendered = line.replace(/\{(\w+)\}/g, (match, varName) => {
+        return variables[varName] !== undefined ? variables[varName] : match; // Keep original if variable not found
       });
-    });
+      // Remove lines that are ONLY a variable placeholder that became empty
+      // But keep intentional empty lines (empty strings) and lines with other content
+      if (originalLine.trim().match(/^\{\w+\}$/) && rendered.trim() === '') {
+        return null; // Mark for removal
+      }
+      return rendered;
+    }).filter(line => line !== null); // Remove null lines
 
     const message = renderedLines.join('\n');
     

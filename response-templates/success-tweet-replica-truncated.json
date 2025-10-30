@@ -2,6 +2,7 @@
   "type": "success-tweet-replica-truncated",
   "description": "Truncated success message for tweet replica",
   "template": [
+    "{fallbackMessage}",
     "🎉 Tweet archived!",
     "",
     "📱 {undername}",
@@ -10,7 +11,7 @@
     "",
     "✨ @ArNSdomains"
   ],
-  "variables": ["undername", "rootArnsName", "manifestTxId"],
+  "variables": ["undername", "rootArnsName", "manifestTxId", "fallbackMessage"],
   "maxLength": 280
 }
 
