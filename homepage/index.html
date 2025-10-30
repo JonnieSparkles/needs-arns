@@ -154,8 +154,8 @@
             display: flex;
             flex-direction: column;
             gap: 0;
-            max-height: 400px;
-            overflow-y: auto;
+            /* Allow the leaderboard to grow without its own scrollbar */
+            overflow: visible;
         }
         
         .leaderboard-item {
