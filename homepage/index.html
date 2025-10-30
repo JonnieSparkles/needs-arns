@@ -784,19 +784,23 @@
                 
                 // Get first media item if available
                 let previewMediaTxId = null;
+                let previewMediaType = null;
                 if (metadata.archive && metadata.archive.media && metadata.archive.media.length > 0) {
                     previewMediaTxId = metadata.archive.media[0].txId;
+                    previewMediaType = metadata.archive.media[0].type || null;
                 }
                 
                 return {
                     tweetText,
-                    previewMediaTxId
+                    previewMediaTxId,
+                    previewMediaType
                 };
             } catch (error) {
                 console.error(`Error fetching metadata ${metadataTxId}:`, error);
                 return {
                     tweetText: 'Tweet content unavailable',
-                    previewMediaTxId: null
+                    previewMediaTxId: null,
+                    previewMediaType: null
                 };
             }
         }
@@ -851,6 +855,7 @@
                 // Fetch manifest metadata to get tweet text and media
                 let tweetText = 'Tweet content unavailable';
                 let previewMediaTxId = null;
+                let previewMediaType = null;
                 
                 if (mention.manifestTxId) {
                     const metadataTxId = await fetchManifestMetadata(mention.manifestTxId);
@@ -858,6 +863,7 @@
                         const metadataContent = await fetchMetadataContent(metadataTxId);
                         tweetText = metadataContent.tweetText;
                         previewMediaTxId = metadataContent.previewMediaTxId;
+                        previewMediaType = metadataContent.previewMediaType;
                     }
                 }
                 
@@ -882,17 +888,26 @@
                         ${hasMedia && previewUrl ? `
                         <div class="feed-media-container">
                             <div class="feed-preview">
+                                ${previewMediaType === 'video' ? `
                                 <video 
                                     src="${previewUrl}" 
                                     controls
                                     preload="metadata"
                                     style="width: 100%; height: auto; max-height: 400px; object-fit: cover;"
                                     onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';"
-                                    onload="this.nextElementSibling.style.display='none';">
+                                    onloadeddata="this.nextElementSibling.style.display='none';">
                                 </video>
-                                <div class="feed-preview-placeholder" style="display:none;">
-                                    📱
-                                </div>
+                                <div class="feed-preview-placeholder" style="display:none;">📹</div>
+                                ` : `
+                                <img 
+                                    src="${previewUrl}"
+                                    alt=""
+                                    style="width: 100%; height: auto; max-height: 400px; object-fit: cover;"
+                                    onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';"
+                                    onload="this.nextElementSibling.style.display='none';"
+                                />
+                                <div class="feed-preview-placeholder" style="display:none;">🖼️</div>
+                                `}
                             </div>
                         </div>
                         ` : ''}
