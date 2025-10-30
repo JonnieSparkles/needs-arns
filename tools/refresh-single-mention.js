@@ -38,26 +38,56 @@ async function main() {
   // Optional override for parent username (3rd arg)
   const parentUsernameOverride = process.argv[3];
 
-  // If override provided, inject/update the parent user in includes.users
-  if (parentUsernameOverride) {
-    const raw = mentionData?.rawApiResponse || {};
-    const parent = raw?.parentTweet || null;
-    if (parent?.author_id) {
-      const includes = raw.includes || {};
-      const users = Array.isArray(includes.users) ? includes.users : [];
+  // Auto-detect and inject missing parent user from mention tweet entities
+  const raw = mentionData?.rawApiResponse || {};
+  const parent = raw?.parentTweet || null;
+  const mention = raw?.mentionTweet || null;
+  
+  if (parent?.author_id) {
+    const includes = raw.includes || {};
+    const users = Array.isArray(includes.users) ? includes.users : [];
+    const hasParentUser = users.some(u => u?.id === parent.author_id);
+    
+    if (!hasParentUser) {
+      // Try to find parent username from mention tweet entities
+      let parentUsername = parentUsernameOverride;
+      
+      if (!parentUsername && mention?.entities?.mentions) {
+        const mentionEntity = mention.entities.mentions.find(m => m.id === parent.author_id);
+        if (mentionEntity?.username) {
+          parentUsername = mentionEntity.username;
+          console.log(`🔍 Auto-detected parent username from mention entities: ${parentUsername}`);
+        }
+      }
+      
+      if (parentUsername) {
+        users.push({ id: parent.author_id, username: parentUsername });
+        mentionData.rawApiResponse = {
+          ...raw,
+          includes: { ...includes, users }
+        };
+        console.log(`✅ Injected parent user: ${parentUsername} (${parent.author_id})`);
+      } else if (parentUsernameOverride) {
+        users.push({ id: parent.author_id, username: parentUsernameOverride });
+        mentionData.rawApiResponse = {
+          ...raw,
+          includes: { ...includes, users }
+        };
+        console.log(`✅ Injected parent username override: ${parentUsernameOverride}`);
+      } else {
+        console.warn(`⚠️ Parent user missing and could not be auto-detected. Parent author_id: ${parent.author_id}`);
+      }
+    } else if (parentUsernameOverride) {
+      // Update existing parent user if override provided
       const existing = users.find(u => u?.id === parent.author_id);
       if (existing) {
         existing.username = parentUsernameOverride;
-      } else {
-        users.push({ id: parent.author_id, username: parentUsernameOverride });
+        mentionData.rawApiResponse = {
+          ...raw,
+          includes: { ...includes, users }
+        };
+        console.log(`🔧 Updated parent username to: ${parentUsernameOverride}`);
       }
-      mentionData.rawApiResponse = {
-        ...raw,
-        includes: { ...includes, users }
-      };
-      console.log(`🔧 Injected parent username override: ${parentUsernameOverride}`);
-    } else {
-      console.warn('⚠️ Parent tweet author_id missing; cannot apply username override.');
     }
   }
 
