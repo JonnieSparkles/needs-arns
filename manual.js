@@ -391,6 +391,32 @@ async function main() {
     onchainId = recordResult.recordId;
     console.log(`✅ ArNS record set: ${onchainId}`);
 
+    // Update metadata object with final ArNS info
+    metadataObj.archive.htmlTxId = htmlTxId;
+    metadataObj.archive.manifestTxId = manifestTxId;
+    metadataObj.archive.arnsRecordId = onchainId;
+    metadataObj.archive.assignedAt = new Date().toISOString();
+
+    // Save individual mention archive
+    const archiveFile = await createMentionArchive(metadataObj);
+    if (archiveFile) {
+      console.log(`✅ Archive entry created: ${archiveFile}`);
+      
+      // Upload and assign archive index
+      console.log('📤 Uploading archive index...');
+      try {
+        const indexResult = await uploadAndAssignArchiveIndex(ant, jwk, ROOT_ARNS_NAME, DEFAULT_TTL_SECONDS);
+        if (indexResult.success) {
+          console.log(`✅ Archive index updated: ${indexResult.txId}`);
+        } else {
+          console.warn(`⚠️ Archive index update failed (non-critical): ${indexResult.message || indexResult.error}`);
+        }
+      } catch (error) {
+        console.warn(`⚠️ Archive index update error (non-critical): ${error.message}`);
+      }
+    } else {
+      console.log('⚠️ Archive entry creation failed, but assignment succeeded');
+    }
 
     // Step 6: Get reply target
     let replyTo = '';
@@ -492,88 +518,6 @@ async function main() {
         isUploadedMedia: uploaded,
         timestamp: new Date().toISOString()
       });
-    }
-
-    // Step 10: Archive (after reply is sent)
-    const doArchive = await askYesNo(rl, '\n📚 Create local archive entry?');
-    if (doArchive && replyId) {
-      try {
-        const mentionId = replyId;
-        const processedAt = new Date().toISOString();
-        
-        let archiveData;
-        
-        // Always use full tweet replica archive structure
-        if (mentionTweet) {
-          // Use the fetched tweet data if available
-          const metadataObj = buildMetadataObject(mentionTweet, parentTweet, mentionUser, parentUser, mediaArray, includes);
-          metadataObj.metadata.mentionId = mentionId;
-          metadataObj.metadata.undername = undername;
-          metadataObj.metadata.processedAt = processedAt;
-          metadataObj.archive.htmlTxId = TEMPLATE_HTML_TXID;
-          metadataObj.archive.manifestTxId = manifestTxId;
-          metadataObj.archive.arnsRecordId = onchainId;
-          metadataObj.archive.assignedAt = processedAt;
-          
-          archiveData = metadataObj;
-        } else {
-          // Fallback: build minimal replica structure
-          archiveData = {
-            metadata: {
-              mentionId: mentionId,
-              undername: undername,
-              processedAt: processedAt,
-              archiveType: 'tweet_replica',
-              success: true,
-              archiveVersion: '2.0.0'
-            },
-            rawApiResponse: {
-              fetchedAt: processedAt,
-              mentionTweet: {
-                id: mentionId,
-                text: `Manual assignment for ${undername}`,
-                author_id: null
-              },
-              parentTweet: null,
-              includes: {
-                users: username !== 'manual' ? [{ id: null, username: username }] : [],
-                media: [],
-                tweets: []
-              }
-            },
-            archive: {
-              htmlTxId: TEMPLATE_HTML_TXID,
-              manifestTxId: manifestTxId,
-              arnsRecordId: onchainId,
-              assignedAt: processedAt,
-              media: mediaArray
-            }
-          };
-        }
-        
-        const archiveFile = await createMentionArchive(archiveData);
-        if (archiveFile) {
-          console.log(`✅ Archive entry created: ${archiveFile}`);
-          
-          // Upload and assign archive index
-          console.log('📤 Uploading archive index...');
-          try {
-            const indexResult = await uploadAndAssignArchiveIndex(ant, jwk, ROOT_ARNS_NAME, DEFAULT_TTL_SECONDS);
-            if (indexResult.success) {
-              console.log(`✅ Archive index updated: ${indexResult.txId}`);
-            } else {
-              console.warn(`⚠️ Archive index update failed (non-critical): ${indexResult.message || indexResult.error}`);
-            }
-          } catch (error) {
-            console.warn(`⚠️ Archive index update error (non-critical): ${error.message}`);
-          }
-        } else {
-          console.log('⚠️  Archive entry creation failed, but assignment succeeded');
-        }
-      } catch (error) {
-        console.log(`⚠️  Archive entry creation failed: ${error.message}`);
-        console.log('   Assignment succeeded, but archive was not updated');
-      }
     }
 
     console.log('\n🎉 Done! Your content is now permanently stored and named on Arweave!');

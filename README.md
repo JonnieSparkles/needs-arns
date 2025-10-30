@@ -111,40 +111,17 @@ Bot Response:
 
 ### Environment Variables
 
-```bash
-# Twitter API
-TWITTER_APP_KEY=your_app_key
-TWITTER_APP_SECRET=your_app_secret
-TWITTER_ACCESS_TOKEN=your_access_token
-TWITTER_ACCESS_SECRET=your_access_secret
+Copy `env.example` to `.env` and fill in your values. See [`env.example`](env.example) for all available configuration options.
 
-# ArNS (configured for mainnet)
-ROOT_ARNS_NAME=your_arns_name
-ANT_PROCESS_ID=your_process_id
-WALLET_ADDRESS=your_wallet_address  # For reference/transparency
+**Required:**
+- Twitter API credentials (`TWITTER_APP_KEY`, `TWITTER_APP_SECRET`, `TWITTER_ACCESS_TOKEN`, `TWITTER_ACCESS_SECRET`)
+- ArNS configuration (`ROOT_ARNS_NAME`, `ANT_PROCESS_ID`)
+- Arweave wallet (`ARWEAVE_JWK_JSON` or `ARWEAVE_JWK_B64`)
+- Template system (`TEMPLATE_HTML_TXID` - upload `post-templates/post-replica-template.html` first to get the txId)
 
-# Arweave Wallet (choose one)
-ARWEAVE_JWK_JSON={"kty":"RSA",...}
-# OR
-ARWEAVE_JWK_B64=base64_encoded_wallet
+**Recommended:** `POLL_INTERVAL_MINUTES=16` for Twitter free plan (1 request/15min with buffer)
 
-# Template System (required)
-TEMPLATE_HTML_TXID=your_template_txid  # Shared HTML template txId for tweet replicas (upload post-templates/post-replica-template.html first)
-
-# Optional
-DEFAULT_TTL_SECONDS=60  # ArNS allows 60-86400 seconds (1 min - 24 hours)
-POLL_INTERVAL_MINUTES=16  # 16 minutes for Twitter free plan (1 request/15min with buffer)
-PORT=3000
-
-# Access Control (optional - leave empty for open access)
-ALLOWED_USERS=username1,username2,username3  # Comma-separated list (without @)
-
-# Time-based filtering (optional)
-MENTION_MAX_AGE_HOURS=24  # Only process mentions from last 24 hours
-
-# Retweet behavior (optional)
-ENABLE_RETWEETS=true  # Set to false to disable retweets (saves posts for rate limits)
-```
+**Optional:** Access control, time-based filtering, retweet behavior, and other settings.
 
 ### Install & Run
 
@@ -325,7 +302,7 @@ The codebase uses a clean, modular architecture with shared utilities:
 
 ### Performance Optimizations  
 - ✅ **Single API Call** - Optimized to 1 Twitter API call per polling cycle using expansions
-- ✅ **Rate Limit Handling** - Respects Twitter free plan limits (16min intervals with buffer)
+- ✅ **Rate Limit Handling** - Respects Twitter free plan limits (configurable intervals)
 - ✅ **Automatic Backoff** - Handles rate limit errors (429) with appropriate delays
 - ✅ **Request Queuing** - Processes mentions sequentially to prevent race conditions
 - ✅ **Deduplication** - Prevents processing the same mention multiple times

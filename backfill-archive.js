@@ -5,7 +5,7 @@ import 'dotenv/config';
 import { TwitterApi } from 'twitter-api-v2';
 import { ANT, ArweaveSigner } from '@ar.io/sdk';
 import fs from 'fs';
-import { createMentionArchive, buildMetadataObject, updateMentionArchive } from './lib/archive.js';
+import { createMentionArchive, buildMetadataObject, updateMentionArchive, uploadAndAssignArchiveIndex } from './lib/archive.js';
 import { uploadToArweave, uploadManifest, getTurboClient } from './lib/arweave.js';
 import { generateManifest } from './lib/manifest.js';
 import { getMediaUrls } from './lib/media.js';
@@ -217,6 +217,21 @@ async function backfillArchive() {
       } catch (error) {
         console.error(`❌ Error processing ${mentionId}:`, error.message);
         errorCount++;
+      }
+    }
+    
+    // Upload and assign archive index at end of backfill
+    if (processedCount > 0) {
+      console.log('\n📤 Uploading archive index at end of backfill...');
+      try {
+        const indexResult = await uploadAndAssignArchiveIndex(ant, jwk, ROOT_ARNS_NAME, DEFAULT_TTL_SECONDS);
+        if (indexResult.success) {
+          console.log(`✅ Archive index updated: ${indexResult.txId}`);
+        } else {
+          console.warn(`⚠️ Archive index update failed (non-critical): ${indexResult.message || indexResult.error}`);
+        }
+      } catch (error) {
+        console.warn(`⚠️ Archive index update error (non-critical): ${error.message}`);
       }
     }
     

@@ -39,8 +39,6 @@ const TEMPLATE_HTML_TXID = requireEnv('TEMPLATE_HTML_TXID');
 const DEFAULT_TTL_SECONDS = parseInt(process.env.DEFAULT_TTL_SECONDS || '60', 10); // 60 seconds minimum
 const POLL_INTERVAL_MINUTES = parseInt(process.env.POLL_INTERVAL_MINUTES || '16', 10); // 16 minutes for free plan (with buffer)
 const POLL_INTERVAL_MS = POLL_INTERVAL_MINUTES * 60 * 1000; // Convert minutes to milliseconds
-const RATE_LIMIT_BACKOFF_MINUTES = 16; // 16 minutes for Twitter free plan (with buffer)
-const RATE_LIMIT_BACKOFF_MS = RATE_LIMIT_BACKOFF_MINUTES * 60 * 1000; // Convert minutes to milliseconds
 
 // Retweet rate limiting
 let lastRetweetTime = 0;
@@ -474,9 +472,9 @@ async function pollMentionsForever() {
       
     } catch (e) {
       if (e?.code === 429) {
-        console.log(`⏳ Rate limited! Waiting 16 minutes for Twitter free plan reset...`);
+        console.log(`⏳ Rate limited! Waiting ${POLL_INTERVAL_MINUTES} minutes for Twitter free plan reset...`);
         console.log(`📊 Rate limit details: ${e.message || 'No details'}`);
-        backoffMs = RATE_LIMIT_BACKOFF_MS; // Wait full 15 minutes
+        backoffMs = POLL_INTERVAL_MS; // Use configured polling interval
       } else {
       console.error('poll error:', e?.message || e);
         console.error('poll error code:', e?.code);
