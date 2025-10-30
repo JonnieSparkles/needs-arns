@@ -470,12 +470,14 @@ async function pollMentionsForever() {
       backoffMs = POLL_INTERVAL_MS;
       
     } catch (e) {
-      if (e?.code === 429) {
+      const msg = String(e?.message || '').toLowerCase();
+      const code = e?.code ?? e?.status ?? e?.statusCode;
+      if (code === 429 || msg.includes('rate limit') || msg.includes('too many requests')) {
         console.log(`⏳ Rate limited! Waiting ${POLL_INTERVAL_MINUTES} minutes for Twitter free plan reset...`);
         console.log(`📊 Rate limit details: ${e.message || 'No details'}`);
         backoffMs = POLL_INTERVAL_MS; // Use configured polling interval
       } else {
-      console.error('poll error:', e?.message || e);
+        console.error('poll error:', e?.message || e);
         console.error('poll error code:', e?.code);
         console.error('poll error details:', e);
       }
