@@ -9,7 +9,7 @@ import { createMentionArchive, updateMentionArchive, buildMetadataObject, upload
 import { reply, retweet, getTwitterClient } from './lib/twitter.js';
 import { checkUndernameAvailability, createUndernameRecord } from './lib/arns.js';
 import { hasMediaAttachments, extractTxIdFromTweetData, getMediaUrls, processMediaFromTweet } from './lib/media.js';
-import { fetchParentTweet, fetchParentUser, isUserAllowed, extractCommandFromMention, handleHelpCommand, handleAccessDenied, handleNameTaken, handleTxIdFailed, handleNoMedia, handleUploadFailed, handleNoContent, handleGeneralError } from './lib/mentions.js';
+import { fetchParentTweet, fetchParentUser, isUserAllowed, extractCommandFromMention, handleAccessDenied, handleNameTaken, handleTxIdFailed } from './lib/mentions.js';
 import { saveProcessedState, loadProcessedState } from './lib/state.js';
 import { renderTemplate } from './response-templates/loader.js';
 import { generateManifest } from './lib/manifest.js';
@@ -105,11 +105,7 @@ async function handleMention(twitterClient, mention, includes) {
     
     console.log(`🔍 Processing: ${mention.id}`);
     
-    // Handle help command
-    if (command.type === 'help') {
-      await handleHelpCommand(twitterClient, mention.id);
-      return;
-    }
+    // Help command removed
     
     const undername = command.undername;
     console.log(`🏷️ Undername: ${undername}`);
@@ -195,22 +191,31 @@ async function handleMention(twitterClient, mention, includes) {
       
       if (!mediaResult.success) {
         if (mediaResult.error === 'no_media') {
-          await handleNoMedia(twitterClient, mention.id);
+          // Proceed without media
+          mediaArray = [];
+          isUploadedMedia = false;
         } else if (mediaResult.error === 'upload_failed') {
-          await handleUploadFailed(twitterClient, mention.id, mediaResult.message);
+          // Treat as infrastructure error: record and exit without public reply
+          processedDetails[mention.id] = {
+            mentionUsername: mentionUsername,
+            success: false,
+            reason: 'media_upload_failed',
+            error: mediaResult.message,
+            timestamp: new Date().toISOString(),
+            isInfrastructureError: true
+          };
+          return;
         }
-        return;
+      } else {
+        mediaArray = mediaResult.media;
+        isUploadedMedia = true;
+        console.log(`✅ Uploaded ${mediaArray.length} media file(s)`);
       }
-      
-      mediaArray = mediaResult.media;
-      isUploadedMedia = true;
-      console.log(`✅ Uploaded ${mediaArray.length} media file(s)`);
-      
     } else {
-      // No Arweave link AND no media found
-      console.log(`❌ No Arweave TXID or media found in parent tweet ${parent.id}`);
-      await handleNoContent(twitterClient, mention.id);
-      return;
+      // Proceed with zero media
+      mediaArray = [];
+      isUploadedMedia = false;
+      console.log(`ℹ️ Proceeding without media for parent tweet ${parent.id}`);
     }
 
     // Build metadata object
@@ -330,12 +335,8 @@ async function handleMention(twitterClient, mention, includes) {
       isInfrastructureError: isInfrastructureError
     };
     
-    // Only reply to user-related errors, not infrastructure issues
-    if (!isInfrastructureError) {
-      await handleGeneralError(twitterClient, mention.id, err?.message ?? 'unknown error');
-    } else {
-      console.log(`🔧 Infrastructure error - skipping reply to user`);
-    }
+    // No public replies on errors (user or infra) in simplified mode
+    console.log(isInfrastructureError ? `🔧 Infrastructure error - no public reply` : `ℹ️ User error - no public reply`);
   }
 }
 
