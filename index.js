@@ -4,14 +4,15 @@ import { ANT, ArweaveSigner, AOProcess } from '@ar.io/sdk';
 import express from 'express';
 import fs from 'fs';
 import { requireEnv, getJwkFromEnv, isValidUndername, isInfrastructureErrorType, verifyTxIdExists, ARWEAVE_TXID_RE, ASSIGN_CMD_RE } from './lib/utils.js';
-import { uploadToArweave, downloadMedia, getTurboClient } from './lib/arweave.js';
-import { updateArchive } from './lib/archive.js';
+import { uploadToArweave, uploadManifest, getTurboClient } from './lib/arweave.js';
+import { createMentionArchive, updateMentionArchive, buildMetadataObject, uploadAndAssignArchiveIndex } from './lib/archive.js';
 import { reply, retweet, getTwitterClient } from './lib/twitter.js';
 import { checkUndernameAvailability, createUndernameRecord } from './lib/arns.js';
 import { hasMediaAttachments, extractTxIdFromTweetData, getMediaUrls, processMediaFromTweet } from './lib/media.js';
-import { fetchParentTweet, fetchParentUser, isUserAllowed, extractCommandFromMention, handleHelpCommand, handleAccessDenied, handleNameTaken, handleTxIdFailed, handleNoMedia, handleUploadFailed, handleNoContent, handleGeneralError, handleSuccess } from './lib/mentions.js';
+import { fetchParentTweet, fetchParentUser, isUserAllowed, extractCommandFromMention, handleAccessDenied, handleNameTaken, handleTxIdFailed } from './lib/mentions.js';
 import { saveProcessedState, loadProcessedState } from './lib/state.js';
 import { renderTemplate } from './response-templates/loader.js';
+import { generateManifest } from './lib/manifest.js';
 
 // ---------- config & env ----------
 
@@ -20,23 +21,24 @@ const {
   TWITTER_APP_SECRET,
   TWITTER_ACCESS_TOKEN,
   TWITTER_ACCESS_SECRET,
-  OWNER_ARNS_NAME,
+  ROOT_ARNS_NAME,
 } = {
   TWITTER_APP_KEY: requireEnv('TWITTER_APP_KEY'),
   TWITTER_APP_SECRET: requireEnv('TWITTER_APP_SECRET'),
   TWITTER_ACCESS_TOKEN: requireEnv('TWITTER_ACCESS_TOKEN'),
   TWITTER_ACCESS_SECRET: requireEnv('TWITTER_ACCESS_SECRET'),
-  OWNER_ARNS_NAME: requireEnv('OWNER_ARNS_NAME')
+  ROOT_ARNS_NAME: requireEnv('ROOT_ARNS_NAME')
 };
 
 const ANT_PROCESS_ID = requireEnv('ANT_PROCESS_ID');
 const WALLET_ADDRESS = process.env.WALLET_ADDRESS || 'Unknown';
 
+// Template system (required)
+const TEMPLATE_HTML_TXID = requireEnv('TEMPLATE_HTML_TXID');
+
 const DEFAULT_TTL_SECONDS = parseInt(process.env.DEFAULT_TTL_SECONDS || '60', 10); // 60 seconds minimum
 const POLL_INTERVAL_MINUTES = parseInt(process.env.POLL_INTERVAL_MINUTES || '16', 10); // 16 minutes for free plan (with buffer)
 const POLL_INTERVAL_MS = POLL_INTERVAL_MINUTES * 60 * 1000; // Convert minutes to milliseconds
-const RATE_LIMIT_BACKOFF_MINUTES = 16; // 16 minutes for Twitter free plan (with buffer)
-const RATE_LIMIT_BACKOFF_MS = RATE_LIMIT_BACKOFF_MINUTES * 60 * 1000; // Convert minutes to milliseconds
 
 // Retweet rate limiting
 let lastRetweetTime = 0;
@@ -91,7 +93,7 @@ const turbo = getTurboClient(jwk);
 async function handleMention(twitterClient, mention, includes) {
   const authorId = mention.author_id;
   const author = includes?.users?.find(u => u.id === authorId);
-  const username = author?.username || 'unknown';
+  const mentionUsername = author?.username || 'unknown';
   
   try {
     // Check format FIRST - if it's not a valid command, completely ignore
@@ -103,11 +105,7 @@ async function handleMention(twitterClient, mention, includes) {
     
     console.log(`🔍 Processing: ${mention.id}`);
     
-    // Handle help command
-    if (command.type === 'help') {
-      await handleHelpCommand(twitterClient, mention.id);
-      return;
-    }
+    // Help command removed
     
     const undername = command.undername;
     console.log(`🏷️ Undername: ${undername}`);
@@ -119,7 +117,7 @@ async function handleMention(twitterClient, mention, includes) {
       
       // Record failed assignment (name taken)
       processedDetails[mention.id] = {
-        username: username,
+        mentionUsername: mentionUsername,
         undername: undername,
         success: false,
         reason: 'undername_taken',
@@ -135,13 +133,13 @@ async function handleMention(twitterClient, mention, includes) {
     if (!isUserAllowed(mention, includes, ALLOWED_USERS)) {
       // Record denied access attempt
       processedDetails[mention.id] = {
-        username: username,
+        mentionUsername: mentionUsername,
         success: false,
         reason: 'access_denied',
         timestamp: new Date().toISOString()
       };
       
-      await handleAccessDenied(twitterClient, mention.id, username);
+      await handleAccessDenied(twitterClient, mention.id, mentionUsername);
       return;
     }
     
@@ -153,26 +151,39 @@ async function handleMention(twitterClient, mention, includes) {
     }
     console.log(`📝 Parent: ${parent.id}`);
 
-    // Check for existing Arweave links first (faster, cheaper)
-    let txId = extractTxIdFromTweetData(parent);
-    let isUploadedMedia = false;
+    // Get user data for metadata
+    const mentionUser = includes?.users?.find(u => u.id === mention.author_id);
+    const parentUser = includes?.users?.find(u => u.id === parent.author_id);
     
-    if (txId) {
+    // Determine content type and handle media/links
+    let mediaArray = [];
+    let isUploadedMedia = false;
+    let existingTxId = extractTxIdFromTweetData(parent);
+    
+    if (existingTxId) {
       // Handle existing Arweave link flow (PRIORITY)
-      console.log(`🔗 Found TXID: ${txId}`);
+      console.log(`🔗 Found existing TXID: ${existingTxId}`);
       
       // Verify existing TXID
-      const ok = await verifyTxIdExists(txId);
+      const ok = await verifyTxIdExists(existingTxId);
       if (!ok) {
-        console.log(`❌ TXID verification failed: ${txId}`);
-        await handleTxIdFailed(twitterClient, mention.id, txId);
+        console.log(`❌ TXID verification failed: ${existingTxId}`);
+        await handleTxIdFailed(twitterClient, mention.id, existingTxId);
         return;
       }
-      console.log(`✅ TXID verified: ${txId}`);
+      console.log(`✅ TXID verified: ${existingTxId}`);
+      
+      // Create metadata entry for existing link (no media upload)
+      mediaArray = [{
+        type: 'link',
+        txId: existingTxId,
+        alt_text: 'Existing Arweave content',
+        index: 0
+      }];
       
     } else if (hasMediaAttachments(parent)) {
-      // Fallback: Handle media upload flow
-      console.log(`📱 No Arweave link found, checking for media attachments`);
+      // Handle media upload flow
+      console.log(`📱 No Arweave link found, uploading media attachments`);
       
       const mediaResult = await processMediaFromTweet(parent, includes, (buffer, contentType) => 
         uploadToArweave(buffer, contentType, 'NeedsArNS-Bot', jwk)
@@ -180,34 +191,71 @@ async function handleMention(twitterClient, mention, includes) {
       
       if (!mediaResult.success) {
         if (mediaResult.error === 'no_media') {
-          await handleNoMedia(twitterClient, mention.id);
+          // Proceed without media
+          mediaArray = [];
+          isUploadedMedia = false;
         } else if (mediaResult.error === 'upload_failed') {
-          await handleUploadFailed(twitterClient, mention.id, mediaResult.message);
+          // Treat as infrastructure error: record and exit without public reply
+          processedDetails[mention.id] = {
+            mentionUsername: mentionUsername,
+            success: false,
+            reason: 'media_upload_failed',
+            error: mediaResult.message,
+            timestamp: new Date().toISOString(),
+            isInfrastructureError: true
+          };
+          return;
         }
-        return;
+      } else {
+        mediaArray = mediaResult.media;
+        isUploadedMedia = true;
+        console.log(`✅ Uploaded ${mediaArray.length} media file(s)`);
       }
-      
-      txId = mediaResult.txId;
-      isUploadedMedia = mediaResult.isUploadedMedia;
-      
     } else {
-      // No Arweave link AND no media found
-      console.log(`❌ No Arweave TXID or media found in parent tweet ${parent.id}`);
-      await handleNoContent(twitterClient, mention.id);
-      return;
+      // Proceed with zero media
+      mediaArray = [];
+      isUploadedMedia = false;
+      console.log(`ℹ️ Proceeding without media for parent tweet ${parent.id}`);
     }
 
-    // Create ArNS record
-    const recordResult = await createUndernameRecord(ant, undername, txId, DEFAULT_TTL_SECONDS);
+    // Build metadata object
+    const metadataObj = buildMetadataObject(mention, parent, mentionUser, parentUser, mediaArray, includes);
+    metadataObj.metadata.undername = undername;
+    
+    // Upload metadata.json
+    console.log('📄 Uploading metadata.json...');
+    const metadataTxId = await uploadToArweave(
+      Buffer.from(JSON.stringify(metadataObj, null, 2)), 
+      'application/json',
+      'NeedsArNS-Metadata',
+      jwk
+    );
+    console.log(`✅ Metadata uploaded: ${metadataTxId}`);
+    
+    // Use shared HTML template
+    console.log('📄 Using shared HTML template...');
+    const htmlTxId = TEMPLATE_HTML_TXID;
+    
+    // Create and upload manifest
+    console.log('📦 Creating Arweave manifest...');
+    const manifest = generateManifest(metadataTxId, mediaArray, htmlTxId);
+    const manifestTxId = await uploadManifest(
+      Buffer.from(JSON.stringify(manifest, null, 2)),
+      jwk
+    );
+    console.log(`✅ Manifest uploaded: ${manifestTxId}`);
+
+    // Create ArNS record pointing to manifest
+    console.log(`🔗 Assigning ArNS: ${undername} → ${manifestTxId}`);
+    const recordResult = await createUndernameRecord(ant, undername, manifestTxId, DEFAULT_TTL_SECONDS);
     if (!recordResult.success) {
       if (recordResult.error === 'undername_taken') {
         console.log(`❌ Undername '${undername}' is already taken`);
         
         // Record failed assignment (name taken)
         processedDetails[mention.id] = {
-          username: username,
+          mentionUsername: mentionUsername,
           undername: undername,
-          txId: txId,
           success: false,
           reason: 'undername_taken',
           timestamp: new Date().toISOString()
@@ -220,29 +268,49 @@ async function handleMention(twitterClient, mention, includes) {
     }
     
     const onchainId = recordResult.recordId;
+    console.log(`✅ ArNS record created: ${onchainId}`);
     
-    // Record successful assignment
+    // Update metadata object with final ArNS info
+    metadataObj.archive.htmlTxId = htmlTxId;
+    metadataObj.archive.manifestTxId = manifestTxId;
+    metadataObj.archive.arnsRecordId = onchainId;
+    metadataObj.archive.assignedAt = new Date().toISOString();
+    
+    // Save individual mention archive
+    await createMentionArchive(metadataObj);
+    
+    // Record successful assignment in processed state
     processedDetails[mention.id] = {
-      username: username,
+      mentionUsername: mentionUsername,
       undername: undername,
-      txId: txId,
+      txId: manifestTxId,
       onchainId: onchainId,
       isUploadedMedia: isUploadedMedia,
       success: true,
       timestamp: new Date().toISOString()
     };
-    
-    // Update archive with new record
-    await updateArchive({
-      username: username,
-      undername: undername,
-      txId: txId,
-      isUploadedMedia: isUploadedMedia,
-      timestamp: new Date().toISOString()
-    }, true, ant, OWNER_ARNS_NAME, DEFAULT_TTL_SECONDS, jwk);
 
-    // Send success reply
-    const replyTweetId = await handleSuccess(twitterClient, mention.id, undername, OWNER_ARNS_NAME, txId, isUploadedMedia);
+    // Send success reply with manifest txId
+    console.log('💬 Sending success reply...');
+    const templateType = 'success-tweet-replica';
+    const msg = renderTemplate(templateType, {
+      undername,
+      rootArnsName: ROOT_ARNS_NAME,
+      manifestTxId
+    });
+    
+    if (!msg) {
+      const fallbackMsg = `🎉 ${undername}_${ROOT_ARNS_NAME}.ar.io → ${manifestTxId}`;
+      console.log('⚠️ Template loading failed, using fallback message');
+      const replyTweetId = await reply(twitterClient, mention.id, fallbackMsg);
+      return;
+    }
+    
+    // Wait 1 minute before replying
+    console.log('⏳ Waiting 1 minute before replying...');
+    await new Promise(resolve => setTimeout(resolve, 60000));
+    
+    const replyTweetId = await reply(twitterClient, mention.id, msg);
     
     // Retweet the success message to promote the archived content
     if (replyTweetId && ENABLE_RETWEETS) {
@@ -259,7 +327,7 @@ async function handleMention(twitterClient, mention, includes) {
     
     // Record failed assignment (error)
     processedDetails[mention.id] = {
-      username: username,
+      mentionUsername: mentionUsername,
       success: false,
       reason: 'error',
       error: err?.message || 'unknown error',
@@ -267,12 +335,8 @@ async function handleMention(twitterClient, mention, includes) {
       isInfrastructureError: isInfrastructureError
     };
     
-    // Only reply to user-related errors, not infrastructure issues
-    if (!isInfrastructureError) {
-      await handleGeneralError(twitterClient, mention.id, err?.message ?? 'unknown error');
-    } else {
-      console.log(`🔧 Infrastructure error - skipping reply to user`);
-    }
+    // No public replies on errors (user or infra) in simplified mode
+    console.log(isInfrastructureError ? `🔧 Infrastructure error - no public reply` : `ℹ️ User error - no public reply`);
   }
 }
 
@@ -382,6 +446,19 @@ async function pollMentionsForever() {
             // Save state after each processed mention
             saveProcessedState(processedMentions, sinceId, processedDetails, PROCESSED_MENTIONS_FILE);
             }
+            
+            // Upload and assign archive index at end of cycle
+            console.log('📤 Uploading archive index at end of cycle...');
+            try {
+              const indexResult = await uploadAndAssignArchiveIndex(ant, jwk, ROOT_ARNS_NAME, DEFAULT_TTL_SECONDS);
+              if (indexResult.success) {
+                console.log(`✅ Archive index updated: ${indexResult.txId}`);
+              } else {
+                console.warn(`⚠️ Archive index update failed (non-critical): ${indexResult.message || indexResult.error}`);
+              }
+            } catch (error) {
+              console.warn(`⚠️ Archive index update error (non-critical): ${error.message}`);
+            }
           }
         } else {
           console.log('⏰ No recent mentions to process after time filtering');
@@ -394,12 +471,14 @@ async function pollMentionsForever() {
       backoffMs = POLL_INTERVAL_MS;
       
     } catch (e) {
-      if (e?.code === 429) {
-        console.log(`⏳ Rate limited! Waiting 16 minutes for Twitter free plan reset...`);
+      const msg = String(e?.message || '').toLowerCase();
+      const code = e?.code ?? e?.status ?? e?.statusCode;
+      if (code === 429 || msg.includes('rate limit') || msg.includes('too many requests')) {
+        console.log(`⏳ Rate limited! Waiting ${POLL_INTERVAL_MINUTES} minutes for Twitter free plan reset...`);
         console.log(`📊 Rate limit details: ${e.message || 'No details'}`);
-        backoffMs = RATE_LIMIT_BACKOFF_MS; // Wait full 15 minutes
+        backoffMs = POLL_INTERVAL_MS; // Use configured polling interval
       } else {
-      console.error('poll error:', e?.message || e);
+        console.error('poll error:', e?.message || e);
         console.error('poll error code:', e?.code);
         console.error('poll error details:', e);
       }
@@ -437,7 +516,7 @@ app.get('/debug', (_req, res) => {
       hasTwitterKeys: !!(TWITTER_APP_KEY && TWITTER_APP_SECRET),
       hasArweaveWallet: !!jwk,
       hasArnsProcessId: !!ANT_PROCESS_ID,
-      ownerArnsName: OWNER_ARNS_NAME
+      rootArnsName: ROOT_ARNS_NAME
     }
   });
 });

@@ -6,13 +6,13 @@
     "",
     "🔗 Link assigned: {undername}",
     "",
-    "🌐 https://{undername}_{ownerArnsName}.ar.io",
-    "🔗 ar://{undername}_{ownerArnsName}",
+    "🌐 https://{undername}_{rootArnsName}.ar.io",
+    "🔗 ar://{undername}_{rootArnsName}",
     "📋 {txId}",
     "",
     "✨ Powered by @ArNSdomains"
   ],
-  "variables": ["undername", "ownerArnsName", "txId"],
+  "variables": ["undername", "rootArnsName", "txId"],
   "maxLength": 280,
   "fallback": "success-assigned-truncated"
 }

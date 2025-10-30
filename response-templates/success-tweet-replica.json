@@ -1,0 +1,19 @@
+{
+  "type": "success-tweet-replica",
+  "description": "Success message when tweet replica is created and archived",
+  "template": [
+    "🎉 Success! Your tweet is now permanently archived!",
+    "",
+    "📱 Tweet replica created: {undername}",
+    "",
+    "🌐 https://{undername}_{rootArnsName}.ar.io",
+    "🔗 ar://{undername}_{rootArnsName}",
+    "📋 {manifestTxId}",
+    "",
+    "✨ Powered by @ArNSdomains"
+  ],
+  "variables": ["undername", "rootArnsName", "manifestTxId"],
+  "maxLength": 280,
+  "fallback": "success-tweet-replica-truncated"
+}
+

@@ -22,12 +22,54 @@ Built with enterprise-grade optimization, access control, monitoring, and **Turb
 
 **Note:** For posts with multiple images/videos, the bot processes only the **first media attachment** to keep the experience simple and predictable.
 
-### Archive System
-After each successful assignment, the bot automatically:
-1. 📚 **Updates Archive** - Adds the new record to `archive.json`
-2. 📤 **Uploads to Arweave** - Uploads the archive via Turbo SDK
-3. 🏷️ **Assigns ArNS** - Creates `archive_yourname.ar.io` pointing to the archive
-4. 🎨 **Public Gallery** - Homepage displays all archived content with rich metadata
+### Archive System v2.0
+
+After each successful assignment, the bot automatically creates a complete tweet replica archive on Arweave:
+
+1. 📤 **Upload Media** - Uploads all media files from the parent tweet to Arweave
+2. 📄 **Create Metadata** - Generates `metadata.json` with complete Twitter context
+3. 🎨 **Generate HTML** - Creates or uses shared HTML template for tweet replica display
+4. 📦 **Create Manifest** - Bundles everything with an Arweave manifest
+5. 🏷️ **Assign ArNS** - Points `undername_yourname.ar.io` to the manifest
+6. 💾 **Save Archive** - Creates individual mention file in `archive/mentions/{mentionId}.json`
+
+When someone visits `undername_yourname.ar.io`, Arweave serves the manifest which automatically loads the tweet replica with all media, text, and metadata preserved.
+
+**Archive Structure:**
+```
+archive/
+├── metadata/
+│   └── archive-index.json  # Master index of all mentions
+└── mentions/
+    ├── {mentionId}.json    # Individual mention metadata files
+    └── ...
+```
+
+Each mention gets its own JSON file with complete Twitter data, and the master index provides quick lookups across all archived mentions.
+
+**Arweave Manifest:**
+Each tweet replica uses an Arweave manifest (arweave/paths v0.2.0) that bundles all content:
+- `index.html` - The tweet replica HTML (shared template or individual)
+- `metadata.json` - Complete Twitter context and archive metadata
+- `media/{index}.{ext}` - All media files from the tweet
+
+**Template System:**
+The archive supports a shared HTML template for efficiency:
+- **With template** (`TEMPLATE_HTML_TXID`): Uploads only `metadata.json` + `manifest.json` (2 files, ~3KB)
+- **Without template**: Uploads `metadata.json` + `index.html` + `manifest.json` (3 files, ~8KB)
+
+The template fetches `metadata.json` and dynamically renders the tweet replica, providing 62% data reduction and easier global styling updates.
+
+**Backfill Existing Mentions:**
+```bash
+node backfill-archive.js 5
+```
+
+The backfill script efficiently processes existing mentions by:
+- Using Twitter's batch API to fetch all mentions in one call
+- Reusing existing media txIds (no re-upload)
+- Creating complete tweet replicas with manifests
+- Skipping already-processed mentions
 
 ### Example Flows
 
@@ -37,13 +79,15 @@ Original Tweet: "Check out my NFT! https://arweave.net/abc123..."
 Reply: "@NeedsArNS assign cool-nft"
 
 Bot Response:
-🎉 Undername assigned!
-🔗 Link assigned!
-ar://cool-nft_yourname
-cool-nft_yourname.ar.io
-→ abc123...
+🎉 Success! Your tweet is now permanently archived!
 
-Powered by @ArNSdomains
+📱 Tweet replica created: cool-nft
+
+🌐 https://cool-nft_yourname.ar.io
+🔗 ar://cool-nft_yourname
+📋 abc123...
+
+✨ Powered by @ArNSdomains
 ```
 
 **Media Upload:**
@@ -52,55 +96,32 @@ Original Tweet: "My latest artwork! [IMAGE ATTACHED]"
 Reply: "@NeedsArNS assign my-art"
 
 Bot Response:  
-🎉 Undername assigned!
-📸 Media uploaded & assigned!
-ar://my-art_yourname
-my-art_yourname.ar.io
-→ xyz789...
+🎉 Success! Your tweet is now permanently archived!
 
-Powered by @ArNSdomains
+📱 Tweet replica created: my-art
+
+🌐 https://my-art_yourname.ar.io
+🔗 ar://my-art_yourname
+📋 xyz789...
+
+✨ Powered by @ArNSdomains
 ```
 
 ## Setup
 
 ### Environment Variables
 
-```bash
-# Twitter API
-TWITTER_APP_KEY=your_app_key
-TWITTER_APP_SECRET=your_app_secret
-TWITTER_ACCESS_TOKEN=your_access_token
-TWITTER_ACCESS_SECRET=your_access_secret
+Copy `env.example` to `.env` and fill in your values. See [`env.example`](env.example) for all available configuration options.
 
-# ArNS (configured for mainnet)
-OWNER_ARNS_NAME=your_arns_name
-ANT_PROCESS_ID=your_process_id
-WALLET_ADDRESS=your_wallet_address  # For reference/transparency
+**Required:**
+- Twitter API credentials (`TWITTER_APP_KEY`, `TWITTER_APP_SECRET`, `TWITTER_ACCESS_TOKEN`, `TWITTER_ACCESS_SECRET`)
+- ArNS configuration (`ROOT_ARNS_NAME`, `ANT_PROCESS_ID`)
+- Arweave wallet (`ARWEAVE_JWK_JSON` or `ARWEAVE_JWK_B64`)
+- Template system (`TEMPLATE_HTML_TXID` - upload `post-templates/post-replica-template.html` first to get the txId)
 
-# Arweave Wallet (choose one)
-ARWEAVE_JWK_JSON={"kty":"RSA",...}
-# OR
-ARWEAVE_JWK_B64=base64_encoded_wallet
+**Recommended:** `POLL_INTERVAL_MINUTES=16` for Twitter free plan (1 request/15min with buffer)
 
-# Optional
-DEFAULT_TTL_SECONDS=60  # ArNS allows 60-86400 seconds (1 min - 24 hours)
-POLL_INTERVAL_MINUTES=16  # 16 minutes for Twitter free plan (1 request/15min with buffer)
-PORT=3000
-
-# Access Control (optional - leave empty for open access)
-ALLOWED_USERS=username1,username2,username3  # Comma-separated list (without @)
-
-# Time-based filtering (optional)
-MENTION_MAX_AGE_HOURS=24  # Only process mentions from last 24 hours
-
-# Retweet behavior (optional)
-ENABLE_RETWEETS=true  # Set to false to disable retweets (saves posts for rate limits)
-
-# Monthly rate limit handling (optional)
-MONTHLY_RESET_DAY=25  # Day of month when monthly limits reset (1-31)
-MONTHLY_RESET_HOUR_UTC=0  # Hour in UTC when monthly limits reset (0-23)
-MONTHLY_RESET_MINUTE_UTC=0  # Minute in UTC when monthly limits reset (0-59)
-```
+**Optional:** Access control, time-based filtering, retweet behavior, and other settings.
 
 ### Install & Run
 
@@ -118,15 +139,16 @@ npm run manual
 ```
 
 **Interactive features:**
-- 📁 **Local file upload** - Upload files from your computer
-- 🌐 **URL download** - Download and upload from any URL
-- 🔗 **Existing TXID** - Assign existing Arweave transaction IDs
-- 📱 **Tweet extraction** - Extract media from tweet URLs (uses read quota)
+- 📁 **Local file upload** - Upload files from your computer to create tweet replicas
+- 🌐 **URL download** - Download and upload from any URL to create tweet replicas
+- 📱 **Tweet extraction** - Extract media from tweet URLs (uses read quota) for tweet replicas
 - 👤 **Username detection** - Auto-extract usernames from tweet URLs
 - 📝 **Reply preview** - Preview messages before sending
-- 🔄 **Archive integration** - Updates both local and Arweave archives
+- 🔄 **Full archive mode** - Always creates complete tweet replica archives (requires `TEMPLATE_HTML_TXID`)
 - 📊 **Processed mentions** - Updates bot state to prevent reprocessing
 - 🔧 **Shared utilities** - Uses same codebase as main bot for consistency
+
+**Note:** Manual mode always creates full tweet replica archives (manifest + metadata + HTML template). The `TEMPLATE_HTML_TXID` environment variable is required.
 
 ### Turbo Credits (for Media Uploads)
 
@@ -145,10 +167,10 @@ The bot uses a centralized template system for all responses:
 
 ### Template Files
 Located in `response-templates/` directory:
-- `success-uploaded.json` - Full success message for uploaded media
-- `success-assigned.json` - Full success message for assigned links
-- `success-uploaded-truncated.json` - Shorter version for uploaded media
-- `success-assigned-truncated.json` - Shorter version for assigned links
+- `success-tweet-replica.json` - Full success message for tweet replica archives (used for all assignments)
+- `success-tweet-replica-truncated.json` - Shorter version if message exceeds 280 characters
+- `success-uploaded.json` - Legacy template (deprecated, kept for compatibility)
+- `success-assigned.json` - Legacy template (deprecated, kept for compatibility)
 - `success-minimal.json` - Minimal fallback message
 - `error-*.json` - Various error messages
 - `help.json` - Help command response
@@ -280,8 +302,8 @@ The codebase uses a clean, modular architecture with shared utilities:
 
 ### Performance Optimizations  
 - ✅ **Single API Call** - Optimized to 1 Twitter API call per polling cycle using expansions
-- ✅ **Rate Limit Handling** - Respects Twitter free plan limits (16min intervals with buffer)
-- ✅ **Monthly Cap Detection** - Automatically pauses when hitting monthly read limits
+- ✅ **Rate Limit Handling** - Respects Twitter free plan limits (configurable intervals)
+- ✅ **Automatic Backoff** - Handles rate limit errors (429) with appropriate delays
 - ✅ **Request Queuing** - Processes mentions sequentially to prevent race conditions
 - ✅ **Deduplication** - Prevents processing the same mention multiple times
 - ✅ **Infrastructure Error Handling** - Skips replying to users for infrastructure issues
@@ -298,12 +320,15 @@ The codebase uses a clean, modular architecture with shared utilities:
 - ✅ **Undername Validation** - Enforces ArNS naming rules (1-51 chars, a-z, 0-9, -, _)
 - ✅ **Friendly Denial Messages** - Polite responses for unauthorized users
 
-### Archive System
-- ✅ **Live Archive** - Automatically maintains a public archive of all successfully assigned content
-- ✅ **Auto-Upload** - Archive gets uploaded to Arweave and assigned to `archive_yourname.ar.io`
-- ✅ **Rich Metadata** - Includes username, timestamp, media type, and ArNS URLs
-- ✅ **Public Gallery** - Homepage displays all archived content with image previews
-- ✅ **Real-time Updates** - Archive updates automatically with every successful assignment
+### Archive System v2.0
+- ✅ **Tweet Replicas** - Creates complete, self-contained tweet replicas on Arweave with all media
+- ✅ **Individual Files** - Each mention gets its own JSON file in `archive/mentions/` for scalability
+- ✅ **Master Index** - Centralized index in `archive/metadata/archive-index.json` for quick lookups
+- ✅ **Arweave Manifests** - Uses arweave/paths v0.2.0 manifest format for proper bundling
+- ✅ **Template System** - Shared HTML template reduces data by 62% when configured
+- ✅ **Complete Preservation** - Full tweet text, media with alt text, timestamps, and metadata
+- ✅ **Multi-Media Support** - Handles 1-4 images/videos per tweet with responsive grid layouts
+- ✅ **Backfill Support** - Script to migrate existing mentions to new archive structure
 
 ### Development & Monitoring
 - ✅ **Enhanced Logging** - Detailed console output with emojis for easy debugging
@@ -334,7 +359,6 @@ The codebase uses a clean, modular architecture with shared utilities:
 - 🎯 **Enterprise Ready**: Production-tested with comprehensive error handling
 - 📈 **Complete Audit Trail**: JSON file tracks every mention with full details
 - 🔧 **Infrastructure Error Handling**: Automatically detects and handles infrastructure issues without bothering users
-- 📅 **Monthly Cap Management**: Automatically pauses when hitting Twitter monthly read limits
 
 ### User Experience
 - 🎉 **Celebratory Responses**: Fun, engaging replies with emojis
@@ -374,25 +398,5 @@ The bot automatically creates and maintains `processed_mentions.json` with detai
 - 🛡️ **Security Monitoring**: Track access denial attempts and errors
 - ⏰ **Time Filtering**: Automatically ignores mentions older than configured threshold
 
-### Archive File
-The bot automatically creates and maintains `archive.json` with public gallery data:
-
-```json
-{
-  "metadata": {
-    "lastUpdated": "2025-09-28T03:51:36.330Z",
-    "totalRecords": 8,
-    "version": "1.0",
-    "description": "NeedsArNS Bot Archive - All successfully archived content"
-  },
-  "records": [
-    {
-      "undername": "sparkles",
-      "txId": "JT8Am2siXDVuaaAsLiHz8mVraEN7OSHxHkhvf6dJrpc",
-      "username": "JonnieSparkles",
-      "timestamp": "2025-09-28T03:33:28.649Z",
-      "isUploadedMedia": true
-    }
-  ]
-}
-```
+### Archive Index
+The bot automatically creates and maintains `archive/metadata/archive-index.json` with a master index of all archived mentions. See the archive structure section above for details.

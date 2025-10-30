@@ -2,8 +2,8 @@
   "type": "success-minimal",
   "description": "Minimal success message when even truncated version is too long",
   "template": [
-    "🎉 {undername}_{ownerArnsName}.ar.io → {txId}"
+    "🎉 {undername}_{rootArnsName}.ar.io → {txId}"
   ],
-  "variables": ["undername", "ownerArnsName", "txId"],
+  "variables": ["undername", "rootArnsName", "txId"],
   "maxLength": 280
 }

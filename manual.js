@@ -5,9 +5,10 @@ import readline from 'readline';
 import { TwitterApi } from 'twitter-api-v2';
 import { ANT, ArweaveSigner } from '@ar.io/sdk';
 import { requireEnv, getJwkFromEnv, isValidUndername, isInfrastructureErrorType, verifyTxIdExists, guessContentType, parseTweetId, extractUsernameFromUrl, ARWEAVE_TXID_RE } from './lib/utils.js';
-import { uploadToArweave, downloadBuffer, getTurboClient } from './lib/arweave.js';
-import { updateArchive } from './lib/archive.js';
+import { uploadToArweave, uploadManifest, downloadBuffer, getTurboClient } from './lib/arweave.js';
+import { createMentionArchive, buildMetadataObject, uploadAndAssignArchiveIndex } from './lib/archive.js';
 import { reply, retweet, getTwitterClient } from './lib/twitter.js';
+import { generateManifest } from './lib/manifest.js';
 import { checkUndernameAvailability, createUndernameRecord } from './lib/arns.js';
 import { updateProcessedMentions } from './lib/state.js';
 import { renderTemplate } from './response-templates/loader.js';
@@ -19,20 +20,21 @@ const {
   TWITTER_APP_SECRET,
   TWITTER_ACCESS_TOKEN,
   TWITTER_ACCESS_SECRET,
-  OWNER_ARNS_NAME,
+  ROOT_ARNS_NAME,
   ANT_PROCESS_ID
 } = {
   TWITTER_APP_KEY: requireEnv('TWITTER_APP_KEY'),
   TWITTER_APP_SECRET: requireEnv('TWITTER_APP_SECRET'),
   TWITTER_ACCESS_TOKEN: requireEnv('TWITTER_ACCESS_TOKEN'),
   TWITTER_ACCESS_SECRET: requireEnv('TWITTER_ACCESS_SECRET'),
-  OWNER_ARNS_NAME: requireEnv('OWNER_ARNS_NAME'),
+  ROOT_ARNS_NAME: requireEnv('ROOT_ARNS_NAME'),
   ANT_PROCESS_ID: requireEnv('ANT_PROCESS_ID')
 };
 
 const DEFAULT_TTL_SECONDS = parseInt(process.env.DEFAULT_TTL_SECONDS || '60', 10);
 const MANUAL_RETWEET = String(process.env.MANUAL_RETWEET || 'true').toLowerCase() !== 'false';
 const BOT_USER_ID = process.env.BOT_USER_ID || null; // optional; if missing, we'll call /me once
+const TEMPLATE_HTML_TXID = requireEnv('TEMPLATE_HTML_TXID'); // Required for tweet replica mode
 
 // ---------- wallet ----------
 
@@ -145,11 +147,10 @@ async function main() {
       console.log(`✅ Undername '${undername}' is available!`);
     }
 
-    // Step 3: Choose content source
-    const sourceChoice = await askChoice(rl, 'How do you want to provide the content?', [
+    // Step 3: Choose content source (all sources go into tweet replica archive)
+    const sourceChoice = await askChoice(rl, 'How do you want to provide the content for the tweet replica?', [
       'Local file on my computer',
       'URL (direct link to file)',
-      'Existing Arweave TXID',
       'Extract from a tweet (requires read quota)'
     ]);
 
@@ -204,19 +205,6 @@ async function main() {
         console.log(`☁️  Uploaded to Arweave: ${txId}`);
       }
 
-    } else if (sourceChoice.includes('Arweave TXID')) {
-      // Existing TXID
-      let txidInput = '';
-      while (!txidInput) {
-        txidInput = await askQuestion(rl, 'Enter the Arweave TXID: ');
-        if (!/^[A-Za-z0-9_-]{43}$/.test(txidInput)) {
-          console.log('❌ Invalid TXID format. Must be 43 characters (A-Z, a-z, 0-9, -, _)');
-          txidInput = '';
-        }
-      }
-      txId = txidInput;
-      console.log(`🔗 Using existing TXID: ${txId}`);
-
     } else if (sourceChoice.includes('Extract from tweet')) {
       // Tweet extraction
       let tweetUrl = '';
@@ -270,14 +258,164 @@ async function main() {
       console.log(`✅ TXID verified!`);
     }
 
-    // Step 5: Assign ArNS
-    console.log(`\n📝 Assigning ArNS: ${undername} -> ${txId}`);
-    const recordResult = await createUndernameRecord(ant, undername, txId, DEFAULT_TTL_SECONDS);
+    // Step 5: Create full tweet replica (always in manual mode)
+    console.log('\n📦 Creating full tweet replica archive...');
+    
+    let finalTxId = txId;
+    let manifestTxId = null;
+    let metadataTxId = null;
+    let onchainId = null;
+    let mediaArray = [];
+    let mentionTweet = null;
+    let parentTweet = null;
+    let mentionUser = null;
+    let parentUser = null;
+    let includes = { users: [], media: [], tweets: [] };
+
+    // Build media array
+    if (uploaded) {
+      mediaArray = [{
+        type: 'photo', // Default for uploaded content
+        txId: txId,
+        alt_text: `Manual upload for ${undername}`,
+        index: 0
+      }];
+    } else {
+      // URL that contained Arweave TXID or extracted media
+      mediaArray = [{
+        type: 'link',
+        txId: txId,
+        alt_text: 'Content from URL',
+        index: 0
+      }];
+    }
+
+    // Step 6a: Get tweet data for replica (optional but recommended)
+    let fetchTweetData = await askYesNo(rl, 'Do you want to fetch tweet data for the replica? (y/n, uses API quota)');
+    if (fetchTweetData) {
+      let tweetUrl = '';
+      while (!tweetUrl) {
+        tweetUrl = await askQuestion(rl, 'Enter the tweet URL to replicate: ');
+        const tweetId = parseTweetId(tweetUrl);
+        if (!tweetId) {
+          console.log('❌ Invalid tweet URL. Please enter a valid X/Twitter status URL.');
+          tweetUrl = '';
+        } else {
+          try {
+            console.log('📱 Fetching tweet data...');
+            const tweetResponse = await twitter.v2.tweets(tweetId, {
+              expansions: ['author_id', 'attachments.media_keys', 'referenced_tweets.id'],
+              'tweet.fields': ['text', 'created_at', 'entities', 'attachments'],
+              'media.fields': ['type', 'url', 'width', 'height', 'alt_text'],
+              'user.fields': ['username', 'name']
+            });
+            
+            mentionTweet = tweetResponse.data;
+            includes = tweetResponse.includes || {};
+            
+            // Find referenced tweet (parent)
+            const referenced = mentionTweet?.referenced_tweets?.find(t => t.type === 'replied_to');
+            if (referenced && includes.tweets) {
+              parentTweet = includes.tweets.find(t => t.id === referenced.id);
+            }
+            
+            // Get users
+            if (includes.users) {
+              if (mentionTweet?.author_id) {
+                mentionUser = includes.users.find(u => u.id === mentionTweet.author_id);
+              }
+              if (parentTweet?.author_id) {
+                parentUser = includes.users.find(u => u.id === parentTweet.author_id);
+              }
+            }
+            
+            console.log(`✅ Fetched tweet data: ${mentionTweet?.text?.substring(0, 50)}...`);
+            fetchTweetData = true;
+          } catch (e) {
+            console.log(`⚠️  Could not fetch tweet data: ${e.message}`);
+            fetchTweetData = false;
+          }
+        }
+      }
+    }
+    
+    // Create minimal tweet data if not fetched
+    if (!mentionTweet) {
+      mentionTweet = {
+        id: 'manual',
+        text: `Manual assignment for ${undername}`,
+        author_id: null,
+        created_at: new Date().toISOString()
+      };
+    }
+    if (!parentTweet) {
+      parentTweet = null;
+    }
+
+    // Build metadata object
+    const metadataObj = buildMetadataObject(mentionTweet, parentTweet, mentionUser, parentUser, mediaArray, includes);
+    metadataObj.metadata.undername = undername;
+    
+    // Upload metadata.json
+    console.log('📄 Uploading metadata.json...');
+    metadataTxId = await uploadToArweave(
+      Buffer.from(JSON.stringify(metadataObj, null, 2)),
+      'application/json',
+      'NeedsArNS-Metadata',
+      jwk
+    );
+    console.log(`✅ Metadata uploaded: ${metadataTxId}`);
+    
+    // Use shared HTML template
+    const htmlTxId = TEMPLATE_HTML_TXID;
+    console.log(`📄 Using shared HTML template: ${htmlTxId}`);
+    
+    // Create and upload manifest
+    console.log('📦 Creating Arweave manifest...');
+    const manifest = generateManifest(metadataTxId, mediaArray, htmlTxId);
+    manifestTxId = await uploadManifest(
+      Buffer.from(JSON.stringify(manifest, null, 2)),
+      jwk
+    );
+    console.log(`✅ Manifest uploaded: ${manifestTxId}`);
+    
+    finalTxId = manifestTxId; // Use manifest as final target
+
+    // Step 5b: Assign ArNS
+    console.log(`\n📝 Assigning ArNS: ${undername} -> ${finalTxId}`);
+    const recordResult = await createUndernameRecord(ant, undername, finalTxId, DEFAULT_TTL_SECONDS);
     if (!recordResult.success) {
       throw new Error(`ArNS assignment failed: ${recordResult.message}`);
     }
-    console.log(`✅ ArNS record set: ${recordResult.recordId}`);
+    onchainId = recordResult.recordId;
+    console.log(`✅ ArNS record set: ${onchainId}`);
 
+    // Update metadata object with final ArNS info
+    metadataObj.archive.htmlTxId = htmlTxId;
+    metadataObj.archive.manifestTxId = manifestTxId;
+    metadataObj.archive.arnsRecordId = onchainId;
+    metadataObj.archive.assignedAt = new Date().toISOString();
+
+    // Save individual mention archive
+    const archiveFile = await createMentionArchive(metadataObj);
+    if (archiveFile) {
+      console.log(`✅ Archive entry created: ${archiveFile}`);
+      
+      // Upload and assign archive index
+      console.log('📤 Uploading archive index...');
+      try {
+        const indexResult = await uploadAndAssignArchiveIndex(ant, jwk, ROOT_ARNS_NAME, DEFAULT_TTL_SECONDS);
+        if (indexResult.success) {
+          console.log(`✅ Archive index updated: ${indexResult.txId}`);
+        } else {
+          console.warn(`⚠️ Archive index update failed (non-critical): ${indexResult.message || indexResult.error}`);
+        }
+      } catch (error) {
+        console.warn(`⚠️ Archive index update error (non-critical): ${error.message}`);
+      }
+    } else {
+      console.log('⚠️ Archive entry creation failed, but assignment succeeded');
+    }
 
     // Step 6: Get reply target
     let replyTo = '';
@@ -334,12 +472,12 @@ async function main() {
     }
 
     // Step 7: Compose and send reply
-    const templateType = uploaded ? 'success-uploaded' : 'success-assigned';
+    const templateType = 'success-tweet-replica';
     const body = renderTemplate(templateType, {
       undername,
-      ownerArnsName: OWNER_ARNS_NAME,
-      txId
-    }) || `🎉 ${undername}_${OWNER_ARNS_NAME}.ar.io → ${txId}`; // Fallback if template fails
+      rootArnsName: ROOT_ARNS_NAME,
+      manifestTxId
+    }) || `🎉 ${undername}_${ROOT_ARNS_NAME}.ar.io → ${manifestTxId}`;
 
     console.log(`\n📝 Reply message:`);
     console.log('─'.repeat(50));
@@ -375,32 +513,15 @@ async function main() {
       await updateProcessedMentions(replyTweetId, {
         username,
         undername,
-        txId,
+        txId: finalTxId, // Use finalTxId (manifest or direct)
         isUploadedMedia: uploaded,
         timestamp: new Date().toISOString()
       });
     }
 
-    // Step 10: Archive options (after reply is sent)
-    const doArchive = await askYesNo(rl, '\n📚 Update local archive.json?');
-    let doArchiveUpload = false;
-    if (doArchive) {
-      doArchiveUpload = await askYesNo(rl, 'Also upload archive to Arweave and assign archive_<YOURNAME>.ar.io?');
-    }
-
-    if (doArchive || doArchiveUpload) {
-      const arcTx = await updateArchive({ 
-        username, 
-        undername, 
-        txId, 
-        isUploadedMedia: uploaded, 
-        timestamp: new Date().toISOString() 
-      }, !!doArchiveUpload, ant, OWNER_ARNS_NAME, DEFAULT_TTL_SECONDS, jwk);
-      if (arcTx) console.log(`📤 Archive uploaded TXID: ${arcTx}`);
-    }
-
     console.log('\n🎉 Done! Your content is now permanently stored and named on Arweave!');
-    console.log(`🌐 View at: https://${undername}_${OWNER_ARNS_NAME}.ar.io`);
+    console.log(`🌐 View at: https://${undername}_${ROOT_ARNS_NAME}.ar.io`);
+    console.log(`📦 Full tweet replica created with manifest: ${manifestTxId}`);
 
   } catch (error) {
     console.error('\n❌ Error:', error?.message || error);

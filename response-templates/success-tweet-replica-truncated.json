@@ -1,0 +1,16 @@
+{
+  "type": "success-tweet-replica-truncated",
+  "description": "Truncated success message for tweet replica",
+  "template": [
+    "🎉 Tweet archived!",
+    "",
+    "📱 {undername}",
+    "🌐 {undername}_{rootArnsName}.ar.io",
+    "📋 {manifestTxId}",
+    "",
+    "✨ @ArNSdomains"
+  ],
+  "variables": ["undername", "rootArnsName", "manifestTxId"],
+  "maxLength": 280
+}
+

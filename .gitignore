@@ -13,3 +13,5 @@ notes.txt
 # persistent storage
 processed_mentions.json
 archive.json
+OLD-archive.json
+archive/

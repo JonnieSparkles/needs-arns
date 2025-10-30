@@ -4,12 +4,12 @@
   "template": [
     "🎉 Media uploaded & named: {undername}",
     "",
-    "🌐 https://{undername}_{ownerArnsName}.ar.io",
+    "🌐 https://{undername}_{rootArnsName}.ar.io",
     "📋 {txId}",
     "",
     "✨ Powered by @ArNSdomains"
   ],
-  "variables": ["undername", "ownerArnsName", "txId"],
+  "variables": ["undername", "rootArnsName", "txId"],
   "maxLength": 280,
   "fallback": "success-minimal"
 }
