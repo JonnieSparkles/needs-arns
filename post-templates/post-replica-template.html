@@ -429,6 +429,20 @@
     
     const arweaveGateway = detectGateway();
     
+    // Get the appropriate gateway for media URLs
+    // ar.io doesn't support direct media access, so always use arweave.net for media
+    function getMediaGateway() {
+      const hostname = window.location.hostname;
+      
+      // If we're on ar.io or an ArNS subdomain of ar.io, use arweave.net for media
+      if (hostname.includes('ar.io') || hostname.endsWith('.ar.io')) {
+        return 'https://arweave.net';
+      }
+      
+      // For other gateways, use the detected gateway
+      return arweaveGateway;
+    }
+    
     // Get ArNS name and construct gateway host
     function getArnsGatewayHost() {
       const hostname = window.location.hostname;
@@ -521,7 +535,7 @@
       
       mediaArray.slice(0, 4).forEach((media, index) => {
         const spanFull = (count === 3 && index === 0) ? ' span-full' : '';
-        const mediaSrc = `${arweaveGateway}/${media.txId}`;
+        const mediaSrc = `${getMediaGateway()}/${media.txId}`;
         
         if (media.type === 'photo') {
           const escapedSrc = mediaSrc.replace(/'/g, "\\'");
@@ -726,7 +740,7 @@
       
       // Set Open Graph and Twitter image to first media item if available
       if (archive.media && archive.media.length > 0 && archive.media[0].type === 'photo') {
-        const imageUrl = `${arweaveGateway}/${archive.media[0].txId}`;
+        const imageUrl = `${getMediaGateway()}/${archive.media[0].txId}`;
         document.getElementById('og-image').setAttribute('content', imageUrl);
         document.getElementById('twitter-image').setAttribute('content', imageUrl);
       }

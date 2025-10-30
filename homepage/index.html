@@ -658,8 +658,8 @@
             }
         }
         
-        // Helper: Fetch metadata and extract media TXID for preview
-        async function getPreviewMediaTxId(metadataTxId) {
+        // Helper: Fetch metadata and extract tweet text and media
+        async function fetchMetadataContent(metadataTxId) {
             try {
                 // For ar.io gateway, always use arweave.net for TXID fetching
                 const gatewayBase = BOT_CONFIG.gatewayHost === 'ar.io' ? 'https://arweave.net' : `https://${BOT_CONFIG.gatewayHost}`;
@@ -711,17 +711,30 @@
                     throw new Error('Unable to fetch metadata');
                 }
                 
+                // Extract tweet text and media from metadata
+                const parentTweet = metadata.rawApiResponse?.parentTweet;
+                const tweetText = parentTweet?.text || 'Tweet content unavailable';
+                
                 // Get first media item if available
+                let previewMediaTxId = null;
                 if (metadata.archive && metadata.archive.media && metadata.archive.media.length > 0) {
-                    return metadata.archive.media[0].txId;
+                    previewMediaTxId = metadata.archive.media[0].txId;
                 }
                 
-                return null;
+                return {
+                    tweetText,
+                    previewMediaTxId
+                };
             } catch (error) {
                 console.error(`Error fetching metadata ${metadataTxId}:`, error);
-                return null;
+                return {
+                    tweetText: 'Tweet content unavailable',
+                    previewMediaTxId: null
+                };
             }
         }
+        
+        
         
         // Render feed
         async function renderFeed() {
@@ -744,12 +757,16 @@
                 const manifestUrl = `https://${mention.undername}_${BOT_CONFIG.arnsName}.${BOT_CONFIG.gatewayHost}`;
                 const hasMedia = mention.mediaCount > 0;
                 
-                // Load manifest and metadata to get preview image
+                // Fetch manifest metadata to get tweet text and media
+                let tweetText = 'Tweet content unavailable';
                 let previewMediaTxId = null;
-                if (hasMedia && mention.manifestTxId) {
+                
+                if (mention.manifestTxId) {
                     const metadataTxId = await fetchManifestMetadata(mention.manifestTxId);
                     if (metadataTxId) {
-                        previewMediaTxId = await getPreviewMediaTxId(metadataTxId);
+                        const metadataContent = await fetchMetadataContent(metadataTxId);
+                        tweetText = metadataContent.tweetText;
+                        previewMediaTxId = metadataContent.previewMediaTxId;
                     }
                 }
                 
@@ -769,16 +786,19 @@
                             <span class="feed-date">${formatDate(mention.processedAt)}</span>
                         </div>
                         
-                        <div class="feed-title">${mention.undername}</div>
+                        <div class="feed-title">${tweetText}</div>
                         
                         ${hasMedia && previewUrl ? `
                         <div class="feed-media-container">
                             <div class="feed-preview">
-                                <img 
+                                <video 
                                     src="${previewUrl}" 
-                                    alt="${mention.undername}"
+                                    controls
+                                    preload="metadata"
+                                    style="width: 100%; height: auto; max-height: 400px; object-fit: cover;"
                                     onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';"
                                     onload="this.nextElementSibling.style.display='none';">
+                                </video>
                                 <div class="feed-preview-placeholder" style="display:none;">
                                     📱
                                 </div>

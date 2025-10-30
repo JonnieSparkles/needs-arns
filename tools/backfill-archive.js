@@ -5,12 +5,12 @@ import 'dotenv/config';
 import { TwitterApi } from 'twitter-api-v2';
 import { ANT, ArweaveSigner } from '@ar.io/sdk';
 import fs from 'fs';
-import { createMentionArchive, buildMetadataObject, updateMentionArchive, uploadAndAssignArchiveIndex } from './lib/archive.js';
-import { uploadToArweave, uploadManifest, getTurboClient } from './lib/arweave.js';
-import { generateManifest } from './lib/manifest.js';
-import { getMediaUrls } from './lib/media.js';
-import { updateUndernameRecord } from './lib/arns.js';
-import { requireEnv, getJwkFromEnv } from './lib/utils.js';
+import { createMentionArchive, buildMetadataObject, updateMentionArchive, uploadAndAssignArchiveIndex } from '../lib/archive.js';
+import { uploadToArweave, uploadManifest, getTurboClient } from '../lib/arweave.js';
+import { generateManifest } from '../lib/manifest.js';
+import { getMediaUrls } from '../lib/media.js';
+import { updateUndernameRecord } from '../lib/arns.js';
+import { requireEnv, getJwkFromEnv } from '../lib/utils.js';
 
 // ---------- config ----------
 const LIMIT = parseInt(process.argv[2] || '5', 10);
@@ -92,13 +92,6 @@ async function backfillArchive() {
         console.log(`Undername: ${details.undername}`);
         console.log(`Mention Username: ${details.mentionUsername || details.username || 'unknown'}`);
         
-        // Check if already backfilled
-        if (fs.existsSync(`archive/mentions/${mentionId}.json`)) {
-          console.log('⏭️  Already backfilled, skipping...');
-          skippedCount++;
-          continue;
-        }
-        
         // Find tweet data from API response
         const mention = tweetResponse.data.find(t => t.id === mentionId);
         if (!mention) {
@@ -109,24 +102,80 @@ async function backfillArchive() {
         
         const includes = tweetResponse.includes || {};
         
-        // Find parent tweet
-        const replied = mention?.referenced_tweets?.find(t => t.type === 'replied_to');
-        if (!replied) {
-          console.warn('⚠️  No parent tweet found, skipping...');
+        // Determine if this is a bot reply or user request
+        const isBotReply = mention.author_id === '1971034918240256000'; // NeedsArNS bot ID
+        
+        // Determine the final mentionId for file naming
+        const finalMentionId = isBotReply ? 
+          (mention.referenced_tweets?.find(ref => ref.type === 'replied_to')?.id || mentionId) : 
+          mentionId;
+        
+        // Check if already backfilled
+        if (fs.existsSync(`archive/mentions/${finalMentionId}.json`)) {
+          console.log('⏭️  Already backfilled, skipping...');
           skippedCount++;
           continue;
         }
         
-        const parent = includes?.tweets?.find(t => t.id === replied.id);
-        if (!parent) {
+        let parentTweet, mentionUser, parentUser;
+        
+        if (isBotReply) {
+          // This is a bot reply - find the parent (user's request)
+          const replied = mention.referenced_tweets?.find(t => t.type === 'replied_to');
+          if (!replied) {
+            console.warn('⚠️  No parent tweet found for bot reply, skipping...');
+            skippedCount++;
+            continue;
+          }
+          
+          parentTweet = includes?.tweets?.find(t => t.id === replied.id);
+          if (!parentTweet) {
+            console.warn('⚠️  Parent tweet data not available, skipping...');
+            skippedCount++;
+            continue;
+          }
+          
+          // For bot replies: mentionTweet = bot's success message, parentTweet = user's request
+          // But we want to archive the user's request as the main content
+          mentionUser = includes?.users?.find(u => u.username === details.mentionUsername);
+          parentUser = includes?.users?.find(u => u.id === parentTweet.author_id);
+          
+          // Swap them so the user's request becomes the "mention" and bot's reply becomes "parent"
+          const userRequestTweet = parentTweet;
+          const botReplyTweet = mention;
+          
+          // Update the mentionId to match the user's request tweet ID
+          const originalMentionId = mentionId;
+          const userRequestId = userRequestTweet.id;
+          
+          console.log(`🔄 Bot reply detected - swapping tweets:`);
+          console.log(`   Original mentionId: ${originalMentionId} (bot's success message)`);
+          console.log(`   User request ID: ${userRequestId} (user's original request)`);
+          
+          // Use user's request as the main content
+          mention = userRequestTweet;
+          parentTweet = botReplyTweet;
+          
+        } else {
+          // This is a user request - find the parent (original content)
+          const replied = mention.referenced_tweets?.find(t => t.type === 'replied_to');
+          if (!replied) {
+            console.warn('⚠️  No parent tweet found, skipping...');
+            skippedCount++;
+            continue;
+          }
+          
+          parentTweet = includes?.tweets?.find(t => t.id === replied.id);
+          if (!parentTweet) {
           console.warn('⚠️  Parent tweet data not available, skipping...');
           skippedCount++;
           continue;
         }
         
-        // Get user data
-        const mentionUser = includes?.users?.find(u => u.id === mention.author_id);
-        const parentUser = includes?.users?.find(u => u.id === parent.author_id);
+          // For user requests: mentionTweet = user's request, parentTweet = original content
+          mentionUser = includes?.users?.find(u => u.id === mention.author_id);
+          parentUser = includes?.users?.find(u => u.id === parentTweet.author_id);
+        }
         
         // Detect media type properly from Twitter API response
         let mediaArray = [];
@@ -161,8 +210,11 @@ async function backfillArchive() {
         }
         
         // Build metadata object
-        const metadataObj = buildMetadataObject(mention, parent, mentionUser, parentUser, mediaArray, includes);
-        metadataObj.metadata.mentionId = mentionId;
+        const metadataObj = buildMetadataObject(mention, parentTweet, mentionUser, parentUser, mediaArray, includes);
+        
+        // For bot replies, use the user's request tweet ID as the mentionId
+        const metadataMentionId = isBotReply ? mention.id : mentionId;
+        metadataObj.metadata.mentionId = metadataMentionId;
         metadataObj.metadata.undername = details.undername;
         metadataObj.metadata.processedAt = details.timestamp;
         
@@ -208,7 +260,7 @@ async function backfillArchive() {
         // Save individual mention archive
         await createMentionArchive(metadataObj);
         
-        console.log(`✅ Complete backfill: ${mentionId}`);
+        console.log(`✅ Complete backfill: ${finalMentionId}`);
         console.log(`🌐 View at: https://${details.undername}_${ROOT_ARNS_NAME}.ar.io`);
         processedCount++;
         
