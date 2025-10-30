@@ -596,7 +596,8 @@
         // Helper: Fetch manifest and extract metadata TXID
         async function fetchManifestMetadata(manifestTxId) {
             try {
-                const gatewayBase = `https://${BOT_CONFIG.gatewayHost}`;
+                // For ar.io gateway, always use arweave.net for TXID fetching
+                const gatewayBase = BOT_CONFIG.gatewayHost === 'ar.io' ? 'https://arweave.net' : `https://${BOT_CONFIG.gatewayHost}`;
                 let manifestData = null;
                 
                 // Method 1: Try /raw/ path to get raw transaction data
@@ -660,7 +661,8 @@
         // Helper: Fetch metadata and extract media TXID for preview
         async function getPreviewMediaTxId(metadataTxId) {
             try {
-                const gatewayBase = `https://${BOT_CONFIG.gatewayHost}`;
+                // For ar.io gateway, always use arweave.net for TXID fetching
+                const gatewayBase = BOT_CONFIG.gatewayHost === 'ar.io' ? 'https://arweave.net' : `https://${BOT_CONFIG.gatewayHost}`;
                 let metadata = null;
                 
                 // Method 1: Try /raw/ path to get raw transaction data
@@ -752,8 +754,10 @@
                 }
                 
                 // Construct preview URL from media TXID if available
+                // For ar.io gateway, use arweave.net for media previews
+                const mediaGateway = BOT_CONFIG.gatewayHost === 'ar.io' ? 'arweave.net' : BOT_CONFIG.gatewayHost;
                 const previewUrl = previewMediaTxId 
-                    ? `https://${BOT_CONFIG.gatewayHost}/${previewMediaTxId}`
+                    ? `https://${mediaGateway}/${previewMediaTxId}`
                     : null;
                 
                 return `
