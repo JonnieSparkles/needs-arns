@@ -236,7 +236,6 @@ async function handleMention(twitterClient, mention, includes) {
     const manifest = generateManifest(metadataTxId, mediaArray, htmlTxId);
     const manifestTxId = await uploadManifest(
       Buffer.from(JSON.stringify(manifest, null, 2)),
-      'NeedsArNS-Manifest',
       jwk
     );
     console.log(`✅ Manifest uploaded: ${manifestTxId}`);

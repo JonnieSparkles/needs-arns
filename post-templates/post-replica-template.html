@@ -447,12 +447,12 @@
     function getArnsGatewayHost() {
       const hostname = window.location.hostname;
       
-      // If we're on arweave.net, return ar.io (default ArNS gateway)
-      if (hostname.includes('arweave.net')) {
-        return 'ar.io';
+      // If we're on ar.io, use arweave.net for ArNS resolution
+      if (hostname.includes('ar.io')) {
+        return 'arweave.net';
       }
       
-      // Extract gateway from ArNS hostname
+      // For all other gateways, use the current gateway for ArNS resolution
       if (hostname.includes('.')) {
         const parts = hostname.split('.');
         if (parts.length >= 3) {
@@ -464,8 +464,8 @@
         }
       }
       
-      // Fallback
-      return 'ar.io';
+      // Fallback to current hostname
+      return hostname;
     }
     
     // Resolve ArNS name to get manifest TXID

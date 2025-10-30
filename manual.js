@@ -375,7 +375,6 @@ async function main() {
     const manifest = generateManifest(metadataTxId, mediaArray, htmlTxId);
     manifestTxId = await uploadManifest(
       Buffer.from(JSON.stringify(manifest, null, 2)),
-      'NeedsArNS-Manifest',
       jwk
     );
     console.log(`✅ Manifest uploaded: ${manifestTxId}`);

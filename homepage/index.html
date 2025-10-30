@@ -364,6 +364,42 @@
             opacity: 0.8;
         }
         
+        .load-more-container {
+            text-align: center;
+            padding: 24px 16px;
+            border-top: 1px solid #2f3336;
+        }
+        
+        .load-more-btn {
+            background-color: #1da1f2;
+            color: #ffffff;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 8px;
+            font-size: 15px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            min-width: 120px;
+        }
+        
+        .load-more-btn:hover {
+            background-color: #1a91da;
+            transform: translateY(-1px);
+        }
+        
+        .load-more-btn:disabled {
+            background-color: #2f3336;
+            color: #71767a;
+            cursor: not-allowed;
+            transform: none;
+        }
+        
+        .load-more-btn:disabled:hover {
+            background-color: #2f3336;
+            transform: none;
+        }
+        
         @media (max-width: 1024px) {
             .container {
                 grid-template-columns: 1fr;
@@ -421,6 +457,12 @@
                 <div id="feedContainer">
                     <div class="loading">Loading archive...</div>
                 </div>
+                
+                <div class="load-more-container" id="loadMoreContainer" style="display: none;">
+                    <button class="load-more-btn" id="loadMoreBtn" onclick="loadMoreArchives()">
+                        Load More
+                    </button>
+                </div>
             </div>
         </div>
         
@@ -473,6 +515,31 @@
         };
         
         let archiveIndex = null;
+        let currentPage = 0;
+        const ITEMS_PER_PAGE = 10;
+        
+        // Load more archives
+        async function loadMoreArchives() {
+            if (!archiveIndex || !archiveIndex.mentions) return;
+            
+            const loadMoreBtn = document.getElementById('loadMoreBtn');
+            const originalText = loadMoreBtn.textContent;
+            
+            // Show loading state
+            loadMoreBtn.disabled = true;
+            loadMoreBtn.textContent = 'Loading...';
+            
+            try {
+                // Increment page and re-render
+                currentPage++;
+                await renderFeed(false);
+            } catch (error) {
+                console.error('Error loading more archives:', error);
+                // Reset button state on error
+                loadMoreBtn.disabled = false;
+                loadMoreBtn.textContent = originalText;
+            }
+        }
         
         // Load archive index
         async function loadArchiveIndex() {
@@ -541,7 +608,7 @@
                 archiveIndex = archiveData;
                 console.log('Archive index loaded:', archiveIndex);
                 renderStats();
-                renderFeed();
+                renderFeed(true); // Reset pagination on initial load
             } else {
                 console.error('Failed to fetch archive index from all sources');
                 document.getElementById('feedContainer').innerHTML = 
@@ -737,22 +804,46 @@
         
         
         // Render feed
-        async function renderFeed() {
+        async function renderFeed(reset = false) {
             if (!archiveIndex || !archiveIndex.mentions) return;
             
             const container = document.getElementById('feedContainer');
+            const loadMoreContainer = document.getElementById('loadMoreContainer');
+            const loadMoreBtn = document.getElementById('loadMoreBtn');
             
             if (archiveIndex.mentions.length === 0) {
                 container.innerHTML = '<div class="loading">No archived content found.</div>';
+                loadMoreContainer.style.display = 'none';
                 return;
             }
             
-            // Get latest 10 (sorted by processedAt, newest first)
-            const latest = [...archiveIndex.mentions]
-                .sort((a, b) => new Date(b.processedAt) - new Date(a.processedAt))
-                .slice(0, 10);
+            // Reset pagination if this is a fresh load
+            if (reset) {
+                currentPage = 0;
+            }
             
-            const html = await Promise.all(latest.map(async (mention) => {
+            // Get items for current page (sorted by processedAt, newest first)
+            const sortedMentions = [...archiveIndex.mentions]
+                .sort((a, b) => new Date(b.processedAt) - new Date(a.processedAt));
+            
+            const startIndex = currentPage * ITEMS_PER_PAGE;
+            const endIndex = startIndex + ITEMS_PER_PAGE;
+            const currentPageItems = sortedMentions.slice(0, endIndex);
+            
+            // Check if there are more items to load
+            const hasMore = endIndex < sortedMentions.length;
+            
+            // Show/hide load more button
+            if (hasMore) {
+                loadMoreContainer.style.display = 'block';
+                loadMoreBtn.disabled = false;
+                const remaining = sortedMentions.length - endIndex;
+                loadMoreBtn.textContent = `Load More (${remaining} remaining)`;
+            } else {
+                loadMoreContainer.style.display = 'none';
+            }
+            
+            const html = await Promise.all(currentPageItems.map(async (mention) => {
                 // Always use ArNS undername URL for the view link
                 const manifestUrl = `https://${mention.undername}_${BOT_CONFIG.arnsName}.${BOT_CONFIG.gatewayHost}`;
                 const hasMedia = mention.mediaCount > 0;

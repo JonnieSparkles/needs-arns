@@ -4,10 +4,10 @@
 import 'dotenv/config';
 import { ANT, ArweaveSigner } from '@ar.io/sdk';
 import fs from 'fs';
-import { generateManifest } from './lib/manifest.js';
-import { uploadToArweave, uploadManifest } from './lib/arweave.js';
-import { updateUndernameRecord } from './lib/arns.js';
-import { requireEnv, getJwkFromEnv } from './lib/utils.js';
+import { generateManifest } from '../lib/manifest.js';
+import { uploadToArweave, uploadManifest } from '../lib/arweave.js';
+import { updateUndernameRecord } from '../lib/arns.js';
+import { requireEnv, getJwkFromEnv } from '../lib/utils.js';
 
 // ---------- config ----------
 const LIMIT = parseInt(process.argv[2] || '5', 10);
@@ -112,7 +112,6 @@ async function updateTemplateFromArchive() {
         const manifest = generateManifest(existingMetadataTxId, mediaArray, newTemplateTxId);
         const manifestTxId = await uploadManifest(
           Buffer.from(JSON.stringify(manifest, null, 2)),
-          'NeedsArNS-Manifest',
           jwk
         );
         console.log(`✅ New manifest uploaded: ${manifestTxId}`);
