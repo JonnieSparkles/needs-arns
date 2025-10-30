@@ -660,7 +660,23 @@
       const includes = rawApiResponse.includes || {};
       
       // Extract fields from raw API response
-      const parentUsername = includes.users?.find(u => u.id === parentTweet.author_id)?.username || 'unknown';
+      // Use same fallback logic as getTweetUsername in lib/archive.js
+      let parentUsername = 'unknown';
+      if (parentTweet?.author_id) {
+        // First try to find user in includes.users
+        const parentUser = includes.users?.find(u => u.id === parentTweet.author_id);
+        if (parentUser?.username) {
+          parentUsername = parentUser.username;
+        } else if (mentionTweet?.entities?.mentions) {
+          // Fallback: try to find username from mention tweet entities
+          // This works when Twitter API didn't include the user in expansions
+          const mentionEntity = mentionTweet.entities.mentions.find(m => m.id === parentTweet.author_id);
+          if (mentionEntity?.username) {
+            parentUsername = mentionEntity.username;
+          }
+        }
+      }
+      
       const mentionUsername = includes.users?.find(u => u.id === mentionTweet.author_id)?.username || 'unknown';
       const parentText = parentTweet.text || '';
       const parentCreatedAt = parentTweet.created_at || new Date().toISOString();
