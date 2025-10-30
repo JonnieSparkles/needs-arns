@@ -469,7 +469,7 @@
         const BOT_CONFIG = {
             arnsName: arnsName,
             gatewayHost: gatewayHost,
-            archiveIndexUrl: `https://archive_${arnsName}.${gatewayHost}`
+            archiveIndexUrl: `https://archive.${gatewayHost}`
         };
         
         let archiveIndex = null;
@@ -498,7 +498,7 @@
                 if (gatewayHost !== 'ar.io') {
                     console.log('Trying fallback to ar.io...');
                     try {
-                        const fallbackUrl = `https://archive_needsarns.ar.io`;
+                        const fallbackUrl = `https://archive.ar.io`;
                         const fallbackResponse = await fetch(fallbackUrl);
                         
                         if (fallbackResponse.ok) {
