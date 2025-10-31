@@ -105,8 +105,6 @@ async function handleMention(twitterClient, mention, includes) {
     
     console.log(`🔍 Processing: ${mention.id}`);
     
-    // Help command removed
-    
     const requestedUndername = command.undername;
     console.log(`🏷️ Requested undername: ${requestedUndername}`);
     

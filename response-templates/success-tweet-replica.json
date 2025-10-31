@@ -5,7 +5,7 @@
     "{fallbackMessage}",
     "🎉 Success! Your post is now permanently archived!",
     "",
-    "📱 Post replica created: {undername}",
+    "📱 Post archived as: {undername}",
     "",
     "🌐 https://{undername}_{rootArnsName}.ar.io",
     "🔗 ar://{undername}_{rootArnsName}",

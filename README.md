@@ -10,13 +10,13 @@ Built with enterprise-grade optimization, access control, monitoring, and **Turb
 
 ### Mode 1: Existing Arweave Links (Priority)
 1. 📝 **User posts** an Arweave transaction ID (works with any gateway: arweave.net, ar.io, arweave.live, etc.)
-2. 💬 **User replies** with `@yourbot assign <subdomain>` (if whitelisted)
+2. 💬 **User replies** with `@yourbot assign <subdomain>` or `@yourbot archive <subdomain>` (if whitelisted)
 3. 🤖 **Bot creates** `undername_rootname.ar.io` → existing transaction ID mapping
 4. 🎉 **Bot replies** with `🔗 Link assigned!` confirmation
 
 ### Mode 2: Media Upload (Fallback)
 1. 📸 **User posts** image, video, or animated GIF (no Arweave link)
-2. 💬 **User replies** with `@yourbot assign <subdomain>` (if whitelisted)  
+2. 💬 **User replies** with `@yourbot assign <subdomain>` or `@yourbot archive <subdomain>` (if whitelisted)  
 3. 🤖 **Bot downloads** media → **uploads to Arweave via Turbo** → **creates mapping**
 4. 🎉 **Bot replies** with `📸 Media uploaded & assigned!` confirmation
 
@@ -76,7 +76,7 @@ The backfill script efficiently processes existing mentions by:
 **Existing Link:**
 ```
 Original Tweet: "Check out my NFT! https://arweave.net/abc123..."
-Reply: "@NeedsArNS assign cool-nft"
+Reply: "@NeedsArNS assign cool-nft" or "@NeedsArNS archive cool-nft"
 
 Bot Response:
 🎉 Success! Your tweet is now permanently archived!
@@ -93,7 +93,7 @@ Bot Response:
 **Media Upload:**
 ```
 Original Tweet: "My latest artwork! [IMAGE ATTACHED]"
-Reply: "@NeedsArNS assign my-art"
+Reply: "@NeedsArNS assign my-art" or "@NeedsArNS archive my-art"
 
 Bot Response:  
 🎉 Success! Your tweet is now permanently archived!

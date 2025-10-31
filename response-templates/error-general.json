@@ -1,9 +1,0 @@
-{
-  "type": "error-general",
-  "description": "General error message for unexpected failures",
-  "template": [
-    "❌ Failed: {errorMessage}"
-  ],
-  "variables": ["errorMessage"],
-  "maxLength": 280
-}

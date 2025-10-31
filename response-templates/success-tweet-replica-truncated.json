@@ -3,7 +3,7 @@
   "description": "Truncated success message for tweet replica",
   "template": [
     "{fallbackMessage}",
-    "🎉 Tweet archived!",
+    "🎉 Post archived!",
     "",
     "📱 {undername}",
     "🌐 {undername}_{rootArnsName}.ar.io",
