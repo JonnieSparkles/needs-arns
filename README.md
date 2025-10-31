@@ -117,7 +117,7 @@ Copy `env.example` to `.env` and fill in your values. See [`env.example`](env.ex
 - Twitter API credentials (`TWITTER_APP_KEY`, `TWITTER_APP_SECRET`, `TWITTER_ACCESS_TOKEN`, `TWITTER_ACCESS_SECRET`)
 - ArNS configuration (`ROOT_ARNS_NAME`, `ANT_PROCESS_ID`)
 - Arweave wallet (`ARWEAVE_JWK_JSON` or `ARWEAVE_JWK_B64`)
-- Template system (`TEMPLATE_HTML_TXID` - upload `post-templates/post-replica-template.html` first to get the txId)
+- Template system (`TEMPLATE_HTML_TXID` - upload `archive-templates/post-archive-template.html` first to get the txId)
 
 **Recommended:** `POLL_INTERVAL_MINUTES=16` for Twitter free plan (1 request/15min with buffer)
 

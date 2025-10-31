@@ -52,7 +52,7 @@ async function updateTemplateFromArchive() {
       newTemplateTxId = 'DRY_RUN_TEMPLATE_TXID';
       console.log(`🔍 DRY RUN: Would upload template -> ${newTemplateTxId}`);
     } else {
-      const templateBuffer = fs.readFileSync('post-templates/post-replica-template.html');
+      const templateBuffer = fs.readFileSync('archive-templates/post-archive-template.html');
       newTemplateTxId = await uploadToArweave(
         templateBuffer,
         'text/html',

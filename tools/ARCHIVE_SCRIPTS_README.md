@@ -134,7 +134,7 @@ node update-template-from-archive.js 5 --dry-run
 ### Template Updates
 When you improve the HTML template:
 ```bash
-# 1. Update your post-replica-template.html
+# 1. Update your archive-templates/post-archive-template.html
 # 2. Run the update script
 node update-template-from-archive.js 999
 ```
