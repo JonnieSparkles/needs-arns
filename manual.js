@@ -472,7 +472,7 @@ async function main() {
     }
 
     // Step 7: Compose and send reply
-    const templateType = 'success-tweet-replica';
+    const templateType = 'success-post-archive';
     const body = renderTemplate(templateType, {
       undername,
       rootArnsName: ROOT_ARNS_NAME,

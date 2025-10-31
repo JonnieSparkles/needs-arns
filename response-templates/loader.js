@@ -6,7 +6,7 @@ const templateCache = new Map();
 
 /**
  * Load a template from JSON file
- * @param {string} templateType - The template type (e.g., 'success-uploaded')
+ * @param {string} templateType - The template type (e.g., 'success-post-archive')
  * @returns {Object|null} Template object or null if not found
  */
 export function loadTemplate(templateType) {

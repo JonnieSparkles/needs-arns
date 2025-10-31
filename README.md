@@ -167,10 +167,8 @@ The bot uses a centralized template system for all responses:
 
 ### Template Files
 Located in `response-templates/` directory:
-- `success-tweet-replica.json` - Full success message for tweet replica archives (used for all assignments)
-- `success-tweet-replica-truncated.json` - Shorter version if message exceeds 280 characters
-- `success-uploaded.json` - Legacy template (deprecated, kept for compatibility)
-- `success-assigned.json` - Legacy template (deprecated, kept for compatibility)
+- `success-post-archive.json` - Full success message for post archives (used for all assignments)
+- `success-post-archive-truncated.json` - Shorter version if message exceeds 280 characters
 - `success-minimal.json` - Minimal fallback message
 - `error-*.json` - Various error messages
 - `help.json` - Help command response

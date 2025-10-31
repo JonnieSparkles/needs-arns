@@ -308,7 +308,7 @@ async function handleMention(twitterClient, mention, includes) {
 
     // Send success reply with manifest txId
     console.log('💬 Sending success reply...');
-    const templateType = 'success-tweet-replica';
+    const templateType = 'success-post-archive';
     const templateVars = {
       undername,
       rootArnsName: ROOT_ARNS_NAME,
