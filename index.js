@@ -105,9 +105,6 @@ async function handleMention(twitterClient, mention, includes) {
     
     console.log(`🔍 Processing: ${mention.id}`);
     
-    const requestedUndername = command.undername;
-    console.log(`🏷️ Requested undername: ${requestedUndername}`);
-    
     // Fetch parent tweet early (needed for fallback logic)
     const parent = fetchParentTweet(includes, mention);
     if (!parent) {
@@ -115,6 +112,9 @@ async function handleMention(twitterClient, mention, includes) {
       return;
     }
     console.log(`📝 Parent: ${parent.id}`);
+    
+    const requestedUndername = command.undername;
+    console.log(`🏷️ Requested undername: ${requestedUndername}`);
     
     // Check if requested undername already exists BEFORE processing media
     let undername = requestedUndername;
@@ -462,24 +462,33 @@ async function pollMentionsForever() {
           if (newMentions.length > 0) {
             console.log(`📋 Queuing ${newMentions.length} new mentions for processing`);
             const includes = res._realData?.includes || {};
+            let cycleHadSuccess = false;
             for (const m of newMentions) {
               processedMentions.add(m.id);
               await processMentionQueue(twitter, m, includes);
-            // Save state after each processed mention
-            saveProcessedState(processedMentions, sinceId, processedDetails, PROCESSED_MENTIONS_FILE);
+              // Check if this mention was successfully processed
+              if (processedDetails[m.id]?.success === true) {
+                cycleHadSuccess = true;
+              }
+              // Save state after each processed mention
+              saveProcessedState(processedMentions, sinceId, processedDetails, PROCESSED_MENTIONS_FILE);
             }
             
-            // Upload and assign archive index at end of cycle
-            console.log('📤 Uploading archive index at end of cycle...');
-            try {
-              const indexResult = await uploadAndAssignArchiveIndex(ant, jwk, ROOT_ARNS_NAME, DEFAULT_TTL_SECONDS);
-              if (indexResult.success) {
-                console.log(`✅ Archive index updated: ${indexResult.txId}`);
-              } else {
-                console.warn(`⚠️ Archive index update failed (non-critical): ${indexResult.message || indexResult.error}`);
+            // Upload and assign archive index at end of cycle ONLY if there were successful archives
+            if (cycleHadSuccess) {
+              console.log('📤 Uploading archive index at end of cycle...');
+              try {
+                const indexResult = await uploadAndAssignArchiveIndex(ant, jwk, ROOT_ARNS_NAME, DEFAULT_TTL_SECONDS);
+                if (indexResult.success) {
+                  console.log(`✅ Archive index updated: ${indexResult.txId}`);
+                } else {
+                  console.warn(`⚠️ Archive index update failed (non-critical): ${indexResult.message || indexResult.error}`);
+                }
+              } catch (error) {
+                console.warn(`⚠️ Archive index update error (non-critical): ${error.message}`);
               }
-            } catch (error) {
-              console.warn(`⚠️ Archive index update error (non-critical): ${error.message}`);
+            } else {
+              console.log('⏭️ Skipping archive index upload - no successful archives this cycle');
             }
           }
         } else {
