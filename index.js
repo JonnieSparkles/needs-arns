@@ -550,8 +550,9 @@ async function pollMentionsForever() {
             for (const m of newMentions) {
               processedMentions.add(m.id);
               await processMentionQueue(twitter, m, includes);
-              // Check if this mention was successfully processed
-              if (processedDetails[m.id]?.success === true) {
+              // Check if this mention was successfully processed AND it created an archive
+              // (exclude direct assignments from "name this" commands)
+              if (processedDetails[m.id]?.success === true && !processedDetails[m.id]?.directAssign) {
                 cycleHadSuccess = true;
               }
               // Save state after each processed mention

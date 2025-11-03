@@ -9,7 +9,7 @@ Built with enterprise-grade optimization, access control, monitoring, and **Turb
 **Three command types:**
 
 ### Mode 1: Direct Naming (Original Intent)
-**Command:** `@NeedsArNS name this <subdomain>` or `@NeedsArNS name <subdomain>`
+**Command:** `@NeedsArNS name this <subdomain>`
 
 1. 📝 **User posts** an Arweave transaction ID (works with any gateway: arweave.net, ar.io, arweave.live, etc.)
 2. 💬 **User replies** with `@NeedsArNS name this <subdomain>` (if whitelisted)
@@ -83,7 +83,7 @@ node backfill-archive.js 5
 The backfill script efficiently processes existing mentions by:
 - Using Twitter's batch API to fetch all mentions in one call
 - Reusing existing media txIds (no re-upload)
-- Creating complete tweet replicas with manifests
+- Creating complete post archive with manifests
 - Skipping already-processed mentions
 
 ### Example Flows
@@ -168,9 +168,9 @@ npm run manual
 ```
 
 **Interactive features:**
-- 📁 **Local file upload** - Upload files from your computer to create tweet replicas
-- 🌐 **URL download** - Download and upload from any URL to create tweet replicas
-- 📱 **Tweet extraction** - Extract media from tweet URLs (uses read quota) for tweet replicas
+- 📁 **Local file upload** - Upload files from your computer to create post archives
+- 🌐 **URL download** - Download and upload from any URL to create post archive
+- 📱 **Tweet extraction** - Extract media from tweet URLs (uses read quota) for post archive
 - 👤 **Username detection** - Auto-extract usernames from tweet URLs
 - 📝 **Reply preview** - Preview messages before sending
 - 🔄 **Full archive mode** - Always creates complete tweet replica archives (requires `TEMPLATE_HTML_TXID`)
@@ -348,7 +348,7 @@ The codebase uses a clean, modular architecture with shared utilities:
 - ✅ **Friendly Denial Messages** - Polite responses for unauthorized users
 
 ### Archive System v2.0
-- ✅ **Tweet Replicas** - Creates complete, self-contained tweet replicas on Arweave with all media
+- ✅ **post archive** - Creates complete, self-contained post archive on Arweave with all media
 - ✅ **Individual Files** - Each mention gets its own JSON file in `archive/mentions/` for scalability
 - ✅ **Master Index** - Centralized index in `archive/metadata/archive-index.json` for quick lookups
 - ✅ **Arweave Manifests** - Uses arweave/paths v0.2.0 manifest format for proper bundling
