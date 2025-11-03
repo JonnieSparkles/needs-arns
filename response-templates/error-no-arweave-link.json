@@ -1,0 +1,12 @@
+{
+  "type": "error-no-arweave-link",
+  "description": "Error when parent tweet does not include an Arweave link",
+  "template": [
+    "❌ No Arweave link found in the parent post.",
+    "",
+    "Include a valid ar:// or arweave.net/<txid> link, or use \"archive\" to upload media."
+  ],
+  "variables": ["undername", "rootArnsName"],
+  "maxLength": 280
+}
+

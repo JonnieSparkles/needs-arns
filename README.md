@@ -6,25 +6,40 @@ Built with enterprise-grade optimization, access control, monitoring, and **Turb
 
 ## How it works
 
-**Two modes of operation:**
+**Three command types:**
 
-### Mode 1: Existing Arweave Links (Priority)
+### Mode 1: Direct Naming (Original Intent)
+**Command:** `@NeedsArNS name this <subdomain>` or `@NeedsArNS name <subdomain>`
+
 1. 📝 **User posts** an Arweave transaction ID (works with any gateway: arweave.net, ar.io, arweave.live, etc.)
-2. 💬 **User replies** with `@yourbot assign <subdomain>` or `@yourbot archive <subdomain>` (if whitelisted)
-3. 🤖 **Bot creates** `undername_rootname.ar.io` → existing transaction ID mapping
-4. 🎉 **Bot replies** with `🔗 Link assigned!` confirmation
+2. 💬 **User replies** with `@NeedsArNS name this <subdomain>` (if whitelisted)
+3. 🤖 **Bot directly assigns** `undername_rootname.ar.io` → existing transaction ID mapping
+4. 🎉 **Bot replies** with confirmation (no archive created)
 
-### Mode 2: Media Upload (Fallback)
+**Use this when:** You want to give an existing Arweave transaction a name without creating an archive replica.
+
+### Mode 2: Archive & Assign (Archive Platform)
+**Command:** `@NeedsArNS assign <subdomain>` or `@NeedsArNS archive <subdomain>`
+
+**For existing Arweave links:**
+1. 📝 **User posts** an Arweave transaction ID (works with any gateway: arweave.net, ar.io, arweave.live, etc.)
+2. 💬 **User replies** with `@NeedsArNS assign <subdomain>` or `@NeedsArNS archive <subdomain>` (if whitelisted)
+3. 🤖 **Bot creates** complete tweet replica archive → assigns `undername_rootname.ar.io` → manifest
+4. 🎉 **Bot replies** with archive confirmation
+
+**For media uploads (fallback):**
 1. 📸 **User posts** image, video, or animated GIF (no Arweave link)
-2. 💬 **User replies** with `@yourbot assign <subdomain>` or `@yourbot archive <subdomain>` (if whitelisted)  
-3. 🤖 **Bot downloads** media → **uploads to Arweave via Turbo** → **creates mapping**
-4. 🎉 **Bot replies** with `📸 Media uploaded & assigned!` confirmation
+2. 💬 **User replies** with `@NeedsArNS assign <subdomain>` or `@NeedsArNS archive <subdomain>` (if whitelisted)  
+3. 🤖 **Bot downloads** media → **uploads to Arweave via Turbo** → **creates archive** → **assigns name**
+4. 🎉 **Bot replies** with archive confirmation
+
+**Use this when:** You want to create a permanent archive replica of the tweet/post with all metadata, media, and context preserved.
 
 **Note:** For posts with multiple images/videos, the bot processes only the **first media attachment** to keep the experience simple and predictable.
 
 ### Archive System v2.0
 
-After each successful assignment, the bot automatically creates a complete tweet replica archive on Arweave:
+When using `assign` or `archive` commands, the bot automatically creates a complete tweet replica archive on Arweave:
 
 1. 📤 **Upload Media** - Uploads all media files from the parent tweet to Arweave
 2. 📄 **Create Metadata** - Generates `metadata.json` with complete Twitter context
@@ -73,7 +88,19 @@ The backfill script efficiently processes existing mentions by:
 
 ### Example Flows
 
-**Existing Link:**
+**Direct Naming (no archive):**
+```
+Original Tweet: "Check out my NFT! https://arweave.net/abc123..."
+Reply: "@NeedsArNS name this cool-nft"
+
+Bot Response:
+🎉 cool-nft_yourname.ar.io → abc123...
+
+✨ Powered by @ArNSdomains
+```
+*Note: Creates direct ArNS mapping only, no archive replica.*
+
+**Archive & Assign (with existing link):**
 ```
 Original Tweet: "Check out my NFT! https://arweave.net/abc123..."
 Reply: "@NeedsArNS assign cool-nft" or "@NeedsArNS archive cool-nft"
@@ -85,12 +112,13 @@ Bot Response:
 
 🌐 https://cool-nft_yourname.ar.io
 🔗 ar://cool-nft_yourname
-📋 abc123...
+📋 manifest-txid...
 
 ✨ Powered by @ArNSdomains
 ```
+*Note: Creates complete tweet replica archive with manifest.*
 
-**Media Upload:**
+**Archive & Assign (media upload):**
 ```
 Original Tweet: "My latest artwork! [IMAGE ATTACHED]"
 Reply: "@NeedsArNS assign my-art" or "@NeedsArNS archive my-art"
@@ -102,10 +130,11 @@ Bot Response:
 
 🌐 https://my-art_yourname.ar.io
 🔗 ar://my-art_yourname
-📋 xyz789...
+📋 manifest-txid...
 
 ✨ Powered by @ArNSdomains
 ```
+*Note: Downloads media, uploads to Arweave, creates archive replica.*
 
 ## Setup
 

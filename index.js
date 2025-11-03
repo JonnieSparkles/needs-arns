@@ -175,6 +175,90 @@ async function handleMention(twitterClient, mention, includes) {
     let isUploadedMedia = false;
     let existingTxId = extractTxIdFromTweetData(parent);
     
+    // Handle "name this" command - direct assignment to existing TXID (no archive)
+    if (command.type === 'name') {
+      if (!existingTxId) {
+        console.log(`❌ No Arweave link found for "name this" command: ${mention.id}`);
+        const noLinkMsg = renderTemplate('error-no-arweave-link', {
+          undername: requestedUndername,
+          rootArnsName: ROOT_ARNS_NAME
+        });
+        await reply(twitterClient, mention.id, noLinkMsg || '❌ No Arweave link found in the parent post. Include a valid ar:// or arweave.net/<txid> link, or use "archive".');
+        return;
+      }
+      
+      // Verify existing TXID
+      console.log(`🔗 Found existing TXID for naming: ${existingTxId}`);
+      const ok = await verifyTxIdExists(existingTxId);
+      if (!ok) {
+        console.log(`❌ TXID verification failed: ${existingTxId}`);
+        await handleTxIdFailed(twitterClient, mention.id, existingTxId);
+        return;
+      }
+      console.log(`✅ TXID verified: ${existingTxId}`);
+      
+      // Directly assign undername -> existing TXID (no manifest/archive)
+      console.log(`🔗 Directly assigning ArNS: ${undername} → ${existingTxId}`);
+      const recordResult = await createUndernameRecord(ant, undername, existingTxId, DEFAULT_TTL_SECONDS);
+      if (!recordResult.success) {
+        if (recordResult.error === 'undername_taken') {
+          console.log(`❌ Undername '${undername}' is already taken`);
+          
+          // Record failed assignment (name taken)
+          processedDetails[mention.id] = {
+            mentionUsername: mentionUsername,
+            undername: requestedUndername,
+            success: false,
+            reason: 'undername_taken',
+            timestamp: new Date().toISOString()
+          };
+          
+          await handleNameTaken(twitterClient, mention.id, requestedUndername);
+          return;
+        }
+        throw new Error(recordResult.message);
+      }
+      
+      const onchainId = recordResult.recordId;
+      console.log(`✅ ArNS record created (direct assign): ${onchainId}`);
+      
+      // Record successful assignment (direct assignment)
+      processedDetails[mention.id] = {
+        mentionUsername: mentionUsername,
+        undername: undername,
+        txId: existingTxId,
+        onchainId: onchainId,
+        isUploadedMedia: false,
+        success: true,
+        directAssign: true,
+        timestamp: new Date().toISOString()
+      };
+      
+      // Reply with minimal success (points straight to the existing TXID)
+      console.log('💬 Sending success reply for direct assignment...');
+      const msg = renderTemplate('success-minimal', {
+        undername,
+        rootArnsName: ROOT_ARNS_NAME,
+        txId: existingTxId
+      });
+      
+      // Wait 1 minute before replying (keeps existing pacing)
+      console.log('⏳ Waiting 1 minute before replying...');
+      await new Promise(resolve => setTimeout(resolve, 60000));
+      
+      const replyTweetId = await reply(twitterClient, mention.id, msg || `🎉 ${undername}_${ROOT_ARNS_NAME}.ar.io → ${existingTxId}`);
+      
+      // Retweet the success message to promote the assignment
+      if (replyTweetId && ENABLE_RETWEETS) {
+        console.log('🔄 Retweeting success message...');
+        await retweet(twitterClient, replyTweetId, BOT_USER_ID);
+      } else if (replyTweetId && !ENABLE_RETWEETS) {
+        console.log('📝 Retweets disabled via ENABLE_RETWEETS=false');
+      }
+      
+      return;
+    }
+    
     if (existingTxId) {
       // Handle existing Arweave link flow (PRIORITY)
       console.log(`🔗 Found existing TXID: ${existingTxId}`);
