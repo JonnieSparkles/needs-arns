@@ -1,0 +1,16 @@
+{
+  "type": "success-name-only",
+  "description": "Success message for direct name assignment (no archive)",
+  "template": [
+    "🎉 Name assigned!",
+    "",
+    "🌐 https://{undername}_{rootArnsName}.ar.io",
+    "🔗 ar://{undername}_{rootArnsName}",
+    "📋 {txId}",
+    "",
+    "✨ Powered by @ArNSdomains"
+  ],
+  "variables": ["undername", "rootArnsName", "txId"],
+  "maxLength": 280
+}
+

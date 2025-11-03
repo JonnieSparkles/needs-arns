@@ -234,9 +234,9 @@ async function handleMention(twitterClient, mention, includes) {
         timestamp: new Date().toISOString()
       };
       
-      // Reply with minimal success (points straight to the existing TXID)
+      // Reply with success message for direct assignment
       console.log('💬 Sending success reply for direct assignment...');
-      const msg = renderTemplate('success-minimal', {
+      const msg = renderTemplate('success-name-only', {
         undername,
         rootArnsName: ROOT_ARNS_NAME,
         txId: existingTxId
