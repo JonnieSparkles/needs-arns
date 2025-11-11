@@ -103,6 +103,7 @@ async function handleMention(twitterClient, mention, includes) {
       return;
     }
     
+    console.log('\n' + '═'.repeat(80));
     console.log(`🔍 Processing: ${mention.id}`);
     
     // Fetch parent tweet early (needed for fallback logic)
@@ -328,8 +329,8 @@ async function handleMention(twitterClient, mention, includes) {
     
     // Estimate sizes for metadata and manifest
     const metadataBuffer = Buffer.from(JSON.stringify(metadataObj, null, 2));
-    const manifest = generateManifest('', mediaArray, TEMPLATE_HTML_TXID); // Temp manifest for size estimate
-    const manifestBuffer = Buffer.from(JSON.stringify(manifest, null, 2));
+    const tempManifest = generateManifest('', mediaArray, TEMPLATE_HTML_TXID); // Temp manifest for size estimate
+    const manifestBuffer = Buffer.from(JSON.stringify(tempManifest, null, 2));
     const totalUploadBytes = metadataBuffer.length + manifestBuffer.length;
     
     // Estimate cost and validate sufficient balance
@@ -345,7 +346,6 @@ async function handleMention(twitterClient, mention, includes) {
       'NeedsArNS-Metadata',
       jwk
     );
-    console.log(`✅ Metadata uploaded: ${metadataTxId}`);
     
     // Use shared HTML template
     console.log('📄 Using shared HTML template...');
@@ -358,10 +358,8 @@ async function handleMention(twitterClient, mention, includes) {
       Buffer.from(JSON.stringify(manifest, null, 2)),
       jwk
     );
-    console.log(`✅ Manifest uploaded: ${manifestTxId}`);
 
     // Create ArNS record pointing to manifest
-    console.log(`🔗 Assigning ArNS: ${undername} → ${manifestTxId}`);
     const recordResult = await createUndernameRecord(ant, undername, manifestTxId, DEFAULT_TTL_SECONDS);
     if (!recordResult.success) {
       if (recordResult.error === 'undername_taken') {
@@ -459,6 +457,8 @@ async function handleMention(twitterClient, mention, includes) {
     
     // No public replies on errors (user or infra) in simplified mode
     console.log(isInfrastructureError ? `🔧 Infrastructure error - no public reply` : `ℹ️ User error - no public reply`);
+  } finally {
+    console.log('═'.repeat(80) + '\n');
   }
 }
 
