@@ -4,7 +4,7 @@ import { ANT, ArweaveSigner, AOProcess } from '@ar.io/sdk';
 import express from 'express';
 import fs from 'fs';
 import { requireEnv, getJwkFromEnv, isValidUndername, isInfrastructureErrorType, verifyTxIdExists, ARWEAVE_TXID_RE, ASSIGN_CMD_RE } from './lib/utils.js';
-import { uploadToArweave, uploadManifest, getTurboClient } from './lib/arweave.js';
+import { uploadToArweave, uploadManifest, getTurboClient, getTurboBalanceWithShared, estimateUploadCostWinc, assertSufficientCredits } from './lib/arweave.js';
 import { createMentionArchive, updateMentionArchive, buildMetadataObject, uploadAndAssignArchiveIndex } from './lib/archive.js';
 import { reply, retweet, getTwitterClient } from './lib/twitter.js';
 import { checkUndernameAvailability, createUndernameRecord } from './lib/arns.js';
@@ -320,6 +320,22 @@ async function handleMention(twitterClient, mention, includes) {
     // Build metadata object
     const metadataObj = buildMetadataObject(mention, parent, mentionUser, parentUser, mediaArray, includes);
     metadataObj.metadata.undername = undername;
+    
+    // Preflight check: estimate total cost for all uploads (metadata + manifest)
+    console.log('🔍 Checking Turbo credit balance before uploads...');
+    const turboForPreflight = getTurboClient(jwk);
+    const balance = await getTurboBalanceWithShared(turboForPreflight);
+    
+    // Estimate sizes for metadata and manifest
+    const metadataBuffer = Buffer.from(JSON.stringify(metadataObj, null, 2));
+    const manifest = generateManifest('', mediaArray, TEMPLATE_HTML_TXID); // Temp manifest for size estimate
+    const manifestBuffer = Buffer.from(JSON.stringify(manifest, null, 2));
+    const totalUploadBytes = metadataBuffer.length + manifestBuffer.length;
+    
+    // Estimate cost and validate sufficient balance
+    const estimatedWinc = await estimateUploadCostWinc(turboForPreflight, totalUploadBytes);
+    assertSufficientCredits(estimatedWinc, balance);
+    console.log('✅ Sufficient credits available for archive uploads');
     
     // Upload metadata.json
     console.log('📄 Uploading metadata.json...');

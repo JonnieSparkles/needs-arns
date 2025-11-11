@@ -183,6 +183,36 @@ npm run manual
 
 The bot uses [Turbo SDK](https://github.com/ardriveapp/turbo-sdk) for fast, reliable media uploads to Arweave.
 
+#### Shared Credits Configuration
+
+You can use credits shared by other wallets to pay for uploads. When enabled, the SDK automatically prioritizes shared credits (closest to expiration first, then lowest amounts) before using your signer's native balance.
+
+```bash
+# Shared Credits Configuration (for using credits shared by other wallets)
+# Enable automatic shared credits usage - SDK will automatically find and use available
+# credit share approvals (closest to expiration first, then lowest amounts, then signer's balance)
+TURBO_USE_SHARED_CREDITS=true
+
+# Optional: Explicit comma-separated payer addresses (overrides auto-discovery)
+# TURBO_SHARED_CREDITS_PAID_BY=addr1,addr2,addr3
+```
+
+**How it works:**
+- When `TURBO_USE_SHARED_CREDITS=true`, the bot fetches your balance and any credit share approvals
+- If `TURBO_SHARED_CREDITS_PAID_BY` is set, those specific addresses are used for payment
+- Otherwise, the bot automatically uses all available shared credit approvals
+- The Turbo SDK handles the priority order (expiration → amount → native balance)
+- Preflight checks validate sufficient combined balance before starting uploads
+
+**Preflight Balance Checks:**
+Before uploading any files for a post archive, the bot:
+1. Estimates the total upload cost for metadata.json and manifest.json
+2. Checks if combined shared + native credits are sufficient
+3. Throws a clear console error if insufficient: `INSUFFICIENT_TURBO_CREDITS`
+4. Shows required vs. available balance breakdown (native + shared)
+
+This prevents wasted processing when credits are low and provides clear feedback for adding more credits.
+
 **Setup:**
 1. **Fund your wallet** with Turbo credits at [ardrive.io/turbo](https://ardrive.io/turbo/)
 2. **Check balance:** The bot logs your credit balance on startup
