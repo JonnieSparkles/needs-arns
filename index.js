@@ -45,6 +45,9 @@ let lastRetweetTime = 0;
 const RETWEET_COOLDOWN_MS = 60000; // 1 minute between retweets (more conservative)
 const ENABLE_RETWEETS = String(process.env.ENABLE_RETWEETS || 'true').toLowerCase() !== 'false';
 
+// Verbose logging
+const VERBOSE_LOGGING = String(process.env.VERBOSE_LOGGING || 'false').toLowerCase() === 'true';
+
 // Bot user ID (known from previous runs)
 const BOT_USER_ID = '1971034918240256000';
 console.log('🤖 Bot initialized: @NeedsArNS');
@@ -513,20 +516,23 @@ async function pollMentionsForever() {
       max_results: 100
     });
       console.log(`📊 API Response: ${res._realData?.data?.length || 0} mentions found`);
-      console.log('🔍 Raw API response object:', JSON.stringify(res, null, 2));
-      
-      // Debug: Log the raw API response
-      if (res._realData?.data && res._realData.data.length > 0) {
-        console.log('🔍 Raw mentions from API:');
-        res._realData.data.forEach((mention, i) => {
-          console.log(`  ${i + 1}. ID: ${mention.id}`);
-          console.log(`     Text: ${JSON.stringify(mention.text)}`);
-          console.log(`     Created: ${mention.created_at}`);
-        });
-      } else {
-        console.log('❌ No mentions in API response');
-        console.log('❌ Raw response data:', res._realData?.data);
-        console.log('❌ Response meta:', res._realData?.meta);
+
+      // Debug: Log the raw API response (only if VERBOSE_LOGGING is enabled)
+      if (VERBOSE_LOGGING) {
+        console.log('🔍 Raw API response object:', JSON.stringify(res, null, 2));
+
+        if (res._realData?.data && res._realData.data.length > 0) {
+          console.log('🔍 Raw mentions from API:');
+          res._realData.data.forEach((mention, i) => {
+            console.log(`  ${i + 1}. ID: ${mention.id}`);
+            console.log(`     Text: ${JSON.stringify(mention.text)}`);
+            console.log(`     Created: ${mention.created_at}`);
+          });
+        } else {
+          console.log('❌ No mentions in API response');
+          console.log('❌ Raw response data:', res._realData?.data);
+          console.log('❌ Response meta:', res._realData?.meta);
+        }
       }
 
       const batch = res._realData?.data ?? [];

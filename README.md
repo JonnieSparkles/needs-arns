@@ -179,6 +179,35 @@ npm run manual
 
 **Note:** Manual mode always creates full tweet replica archives (manifest + metadata + HTML template). The `TEMPLATE_HTML_TXID` environment variable is required.
 
+### PM2 Process Management
+
+For production deployments, use PM2 to manage the bot process with automatic restarts and startup on reboot:
+
+```bash
+# Start the bot with PM2
+pm2 start ecosystem.config.cjs
+
+# View all PM2 processes
+pm2 list
+
+# View real-time logs
+pm2 logs needs-arns
+
+# Restart the bot
+pm2 restart needs-arns
+
+# Stop the bot
+pm2 stop needs-arns
+
+# Save current process list (for auto-restart on reboot)
+pm2 save
+
+# Monitor resource usage
+pm2 monit
+```
+
+**Note:** The PM2 startup script is configured via `ecosystem.config.cjs` with automatic restart and log management.
+
 ### Turbo Credits (for Media Uploads)
 
 The bot uses [Turbo SDK](https://github.com/ardriveapp/turbo-sdk) for fast, reliable media uploads to Arweave.
