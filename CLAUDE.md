@@ -270,13 +270,22 @@ Watch mode (`npm run watch`) monitors specific Twitter accounts and automaticall
 4. Each account gets a dedicated ArNS name with landing page
 5. Bot replies to posts with archive link (configurable)
 
+### Architecture
+
+**Static landing page, dynamic index:**
+- Landing page template is uploaded **once** to the root ArNS (`account-said.ar.io`)
+- Index JSON is uploaded on **each poll cycle** to `index_account-said.ar.io`
+- Landing page dynamically fetches from `index_{arnsName}.{gateway}` based on hostname
+
+This means only the index needs updating when new posts are archived, saving Arweave uploads.
+
 ### URL Structure
 
 Uses hash-based routing for efficiency:
 ```
-account-said.ar.io          → Landing page (lists all posts)
+account-said.ar.io          → Landing page (static, fetches index dynamically)
 account-said.ar.io/#/123    → Deep link to specific post
-index_account-said.ar.io    → JSON index of all posts
+index_account-said.ar.io    → JSON index of all posts (updated each cycle)
 ```
 
 ### Configuration (`watch-config.json`)
@@ -316,12 +325,23 @@ When `filtering.enabled: true`, posts must meet engagement thresholds:
 ### Environment Variables (Watch Mode)
 
 **Required:**
-- `WATCH_LANDING_TEMPLATE_TXID` - TXID of uploaded `watch-landing-template.html`
 - `WATCH_POST_TEMPLATE_TXID` or `TEMPLATE_HTML_TXID` - TXID of post template
 
 **Optional:**
+- `WATCH_LANDING_TEMPLATE_TXID` - TXID of uploaded landing template (for reference/logging only)
 - `WATCH_CONFIG_PATH` - Path to config file (default: `./watch-config.json`)
 - `WATCH_PORT` - Health server port (default: 3001)
+
+### Custom Landing Pages
+
+Account-specific landing pages can be created in `archive-templates/{account-name}/`:
+```
+archive-templates/elon-musk/
+├── index.html           # Custom landing page
+└── profile-photo.jpg    # Profile photo (uploaded with manifest)
+```
+
+Upload the folder as an Arweave manifest, then set as root ArNS record for the account.
 
 ### Watch Mode Archive Structure
 
