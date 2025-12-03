@@ -1,0 +1,70 @@
+{
+  "version": "1.0",
+  "pollIntervalMinutes": 30,
+  "accounts": [
+    {
+      "twitterUsername": "elonmusk",
+      "twitterUserId": "44196397",
+      "arnsName": "elon-musk-said",
+      "antProcessId": "YOUR_ANT_PROCESS_ID_HERE",
+      "enabled": true,
+      "replyToPost": true,
+      "filtering": {
+        "enabled": true,
+        "tier": "ultra-whale",
+        "thresholds": {
+          "minImpressions": 500000,
+          "minLikes": 5000,
+          "minReplies": 500,
+          "minRetweets": 500
+        },
+        "alwaysArchiveMedia": true,
+        "archiveSelfReplies": true,
+        "pendingMaxAgeHours": 24
+      }
+    },
+    {
+      "twitterUsername": "large_account",
+      "twitterUserId": "123456789",
+      "arnsName": "large-account-said",
+      "antProcessId": "YOUR_ANT_PROCESS_ID_HERE",
+      "enabled": false,
+      "replyToPost": true,
+      "filtering": {
+        "enabled": true,
+        "tier": "large-whale",
+        "alwaysArchiveMedia": true,
+        "archiveSelfReplies": true,
+        "pendingMaxAgeHours": 24
+      }
+    },
+    {
+      "twitterUsername": "medium_account",
+      "twitterUserId": "987654321",
+      "arnsName": "medium-account-said",
+      "antProcessId": "YOUR_ANT_PROCESS_ID_HERE",
+      "enabled": false,
+      "replyToPost": false,
+      "filtering": {
+        "enabled": true,
+        "tier": "medium",
+        "thresholds": {
+          "minImpressions": 10000,
+          "minLikes": 100
+        },
+        "pendingMaxAgeHours": 12
+      }
+    },
+    {
+      "twitterUsername": "small_account",
+      "twitterUserId": "111222333",
+      "arnsName": "small-account-said",
+      "antProcessId": "YOUR_ANT_PROCESS_ID_HERE",
+      "enabled": false,
+      "replyToPost": true,
+      "filtering": {
+        "enabled": false
+      }
+    }
+  ]
+}

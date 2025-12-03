@@ -1,0 +1,756 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Elon Musk Archive | Permanent Record on Arweave</title>
+  <meta name="description" content="Permanent, uncensorable archive of @elonmusk posts on Arweave">
+
+  <!-- Open Graph -->
+  <meta property="og:type" content="website">
+  <meta property="og:title" content="Elon Musk Archive">
+  <meta property="og:description" content="Permanent, uncensorable archive of @elonmusk posts on Arweave">
+  <meta property="og:site_name" content="elon-musk-said.ar.io">
+
+  <!-- Twitter Card -->
+  <meta name="twitter:card" content="summary">
+  <meta name="twitter:title" content="Elon Musk Archive">
+  <meta name="twitter:description" content="Permanent, uncensorable archive of @elonmusk posts on Arweave">
+  <meta name="twitter:creator" content="@elonmusk">
+
+  <!-- X favicon -->
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><rect fill=%22%23000%22 width=%22100%22 height=%22100%22 rx=%2220%22/><text x=%2250%22 y=%2272%22 font-size=%2265%22 font-family=%22Arial%22 font-weight=%22bold%22 fill=%22%23fff%22 text-anchor=%22middle%22>X</text></svg>">
+
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      background-color: #000000;
+      color: #ffffff;
+      line-height: 1.5;
+      min-height: 100vh;
+    }
+
+    a {
+      color: #1d9bf0;
+      text-decoration: none;
+    }
+
+    a:hover {
+      text-decoration: underline;
+    }
+
+    .container {
+      max-width: 600px;
+      margin: 0 auto;
+      padding: 20px;
+    }
+
+    /* Header */
+    .header {
+      text-align: center;
+      padding: 32px 0;
+      border-bottom: 1px solid #2f3336;
+      margin-bottom: 24px;
+    }
+
+    .profile-photo {
+      width: 96px;
+      height: 96px;
+      border-radius: 50%;
+      margin-bottom: 16px;
+      border: 3px solid #2f3336;
+    }
+
+    .header h1 {
+      font-size: 24px;
+      font-weight: 700;
+      margin-bottom: 4px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+    }
+
+    .verified-badge {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 22px;
+      height: 22px;
+      background-color: #1d9bf0;
+      border-radius: 50%;
+    }
+
+    .verified-badge svg {
+      width: 14px;
+      height: 14px;
+      fill: #ffffff;
+    }
+
+    .header .handle {
+      color: #71767a;
+      font-size: 15px;
+      margin-bottom: 12px;
+    }
+
+    .header .tagline {
+      color: #71767a;
+      font-size: 15px;
+      margin-top: 12px;
+    }
+
+    /* Loading state */
+    .loading {
+      text-align: center;
+      padding: 40px;
+      color: #71767a;
+    }
+
+    .loading .spinner {
+      display: inline-block;
+      width: 24px;
+      height: 24px;
+      border: 2px solid #2f3336;
+      border-top-color: #1d9bf0;
+      border-radius: 50%;
+      animation: spin 1s linear infinite;
+      margin-bottom: 12px;
+    }
+
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+
+    /* Error state */
+    .error {
+      text-align: center;
+      padding: 40px;
+      color: #f4212e;
+    }
+
+    /* Post list */
+    .post-list {
+      display: flex;
+      flex-direction: column;
+      gap: 0;
+    }
+
+    .post-card {
+      background-color: #000000;
+      border-bottom: 1px solid #2f3336;
+      padding: 16px;
+      cursor: pointer;
+      transition: background-color 0.2s;
+    }
+
+    .post-card:first-child {
+      border-top: 1px solid #2f3336;
+    }
+
+    .post-card:hover {
+      background-color: #080808;
+    }
+
+    .post-card .post-date {
+      font-size: 13px;
+      color: #71767a;
+      margin-bottom: 8px;
+    }
+
+    .post-card .post-text {
+      font-size: 15px;
+      margin-bottom: 12px;
+      white-space: pre-wrap;
+      word-wrap: break-word;
+      display: -webkit-box;
+      -webkit-line-clamp: 4;
+      -webkit-box-orient: vertical;
+      overflow: hidden;
+    }
+
+    .post-card .post-meta {
+      display: flex;
+      gap: 16px;
+      font-size: 13px;
+      color: #71767a;
+    }
+
+    .post-card .post-meta span {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+    }
+
+    /* Stats */
+    .stats {
+      text-align: center;
+      padding: 24px 16px;
+      color: #71767a;
+      font-size: 14px;
+      border-top: 1px solid #2f3336;
+    }
+
+    .stats-number {
+      font-size: 24px;
+      font-weight: 700;
+      color: #ffffff;
+      display: block;
+      margin-bottom: 4px;
+    }
+
+    /* Back button */
+    .back-button {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 16px;
+      background: none;
+      border: 1px solid #2f3336;
+      border-radius: 20px;
+      color: #ffffff;
+      font-size: 14px;
+      cursor: pointer;
+      margin-bottom: 16px;
+      transition: all 0.2s;
+    }
+
+    .back-button:hover {
+      background-color: #1d9bf0;
+      border-color: #1d9bf0;
+    }
+
+    /* Single post view */
+    .single-post {
+      display: none;
+    }
+
+    .single-post.active {
+      display: block;
+    }
+
+    .post-list-view {
+      display: block;
+    }
+
+    .post-list-view.hidden {
+      display: none;
+    }
+
+    /* Post content (reused from post-archive-template) */
+    .tweet-header {
+      display: flex;
+      align-items: center;
+      margin-bottom: 12px;
+      gap: 8px;
+    }
+
+    .user-info {
+      display: flex;
+      flex-direction: column;
+    }
+
+    .username {
+      font-weight: 700;
+      font-size: 15px;
+      color: #ffffff;
+      display: flex;
+      align-items: center;
+      gap: 4px;
+    }
+
+    .username .verified-badge {
+      width: 18px;
+      height: 18px;
+    }
+
+    .username .verified-badge svg {
+      width: 12px;
+      height: 12px;
+    }
+
+    .date {
+      font-size: 15px;
+      color: #71767a;
+      margin-left: auto;
+    }
+
+    .tweet-text {
+      font-size: 17px;
+      line-height: 1.5;
+      margin-bottom: 12px;
+      white-space: pre-wrap;
+      word-wrap: break-word;
+    }
+
+    /* Media grid */
+    .media-grid {
+      margin-bottom: 12px;
+      border-radius: 16px;
+      overflow: hidden;
+      display: grid;
+      gap: 2px;
+    }
+
+    .media-grid.single { grid-template-columns: 1fr; }
+    .media-grid.double { grid-template-columns: repeat(2, 1fr); }
+    .media-grid.triple { grid-template-columns: repeat(2, 1fr); }
+    .media-grid.quad { grid-template-columns: repeat(2, 1fr); }
+
+    .media-item {
+      position: relative;
+      width: 100%;
+      background-color: #000;
+      cursor: pointer;
+    }
+
+    .media-item.span-full {
+      grid-column: 1 / -1;
+    }
+
+    .media-item img,
+    .media-item video {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      display: block;
+    }
+
+    /* Footer */
+    .archive-footer {
+      margin-top: 16px;
+      padding-top: 16px;
+      border-top: 1px solid #2f3336;
+      font-size: 14px;
+      color: #71767a;
+      text-align: center;
+    }
+
+    .archive-footer a {
+      color: #1d9bf0;
+    }
+
+    .request-info {
+      margin-top: 12px;
+      padding: 12px;
+      background-color: #16181c;
+      border-radius: 8px;
+      font-size: 13px;
+      text-align: left;
+    }
+
+    .request-info strong {
+      color: #ffffff;
+    }
+
+    /* Page footer */
+    .page-footer {
+      text-align: center;
+      padding: 24px;
+      margin-top: 24px;
+      border-top: 1px solid #2f3336;
+      color: #71767a;
+      font-size: 13px;
+    }
+
+    .page-footer a {
+      color: #71767a;
+      text-decoration: underline;
+    }
+
+    .page-footer a:hover {
+      color: #1d9bf0;
+    }
+
+    /* Lightbox */
+    .lightbox {
+      display: none;
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background-color: rgba(0, 0, 0, 0.95);
+      z-index: 1000;
+      cursor: pointer;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .lightbox.active {
+      display: flex;
+    }
+
+    .lightbox-content {
+      max-width: 90vw;
+      max-height: 90vh;
+      object-fit: contain;
+    }
+
+    .lightbox-close {
+      position: absolute;
+      top: 20px;
+      right: 30px;
+      color: #ffffff;
+      font-size: 40px;
+      font-weight: bold;
+      cursor: pointer;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <img class="profile-photo" src="./profile-photo.jpg" alt="Elon Musk">
+      <h1>
+        Elon Musk
+        <span class="verified-badge">
+          <svg viewBox="0 0 22 22" aria-label="Verified account">
+            <path d="M20.396 11c-.018-.646-.215-1.275-.57-1.816-.354-.54-.852-.972-1.438-1.246.223-.607.27-1.264.14-1.897-.131-.634-.437-1.218-.882-1.687-.47-.445-1.053-.75-1.687-.882-.633-.13-1.29-.083-1.897.14-.273-.587-.704-1.086-1.245-1.44S11.647 1.62 11 1.604c-.646.017-1.273.213-1.813.568s-.969.854-1.24 1.44c-.608-.223-1.267-.272-1.902-.14-.635.13-1.22.436-1.69.882-.445.47-.749 1.055-.878 1.688-.13.633-.08 1.29.144 1.896-.587.274-1.087.705-1.443 1.245-.356.54-.555 1.17-.574 1.817.02.647.218 1.276.574 1.817.356.54.856.972 1.443 1.245-.224.606-.274 1.263-.144 1.896.13.634.433 1.218.877 1.688.47.443 1.054.747 1.687.878.633.132 1.29.084 1.897-.136.274.586.705 1.084 1.246 1.439.54.354 1.17.551 1.816.569.647-.016 1.276-.213 1.817-.567s.972-.854 1.245-1.44c.604.239 1.266.296 1.903.164.636-.132 1.22-.447 1.68-.907.46-.46.776-1.044.908-1.681s.075-1.299-.165-1.903c.586-.274 1.084-.705 1.439-1.246.354-.54.551-1.17.569-1.816zM9.662 14.85l-3.429-3.428 1.293-1.302 2.072 2.072 4.4-4.794 1.347 1.246z"></path>
+          </svg>
+        </span>
+      </h1>
+      <p class="tagline">What <a href="https://x.com/elonmusk" target="_blank">@elonmusk</a> said — archived forever.</p>
+    </div>
+
+    <div class="loading" id="loading">
+      <div class="spinner"></div>
+      <div>Loading archive...</div>
+    </div>
+
+    <div class="error" id="error" style="display: none;">
+      <div>Failed to load archive</div>
+    </div>
+
+    <!-- Post list view -->
+    <div class="post-list-view" id="post-list-view" style="display: none;">
+      <div class="post-list" id="post-list"></div>
+      <div class="stats" id="stats"></div>
+    </div>
+
+    <!-- Single post view -->
+    <div class="single-post" id="single-post">
+      <button class="back-button" onclick="showPostList()">
+        ← Back to all posts
+      </button>
+      <div id="post-content"></div>
+    </div>
+
+    <div class="page-footer">
+      <div><a href="https://x.com/NeedsArNS" target="_blank">@NeedsArNS</a> • <a href="https://ar.io" target="_blank">ar.io</a> + <a href="https://arweave.com" target="_blank">arweave</a></div>
+    </div>
+  </div>
+
+  <!-- Lightbox -->
+  <div class="lightbox" id="lightbox" onclick="closeLightbox(event)">
+    <span class="lightbox-close" onclick="closeLightbox(event)">&times;</span>
+    <img class="lightbox-content" id="lightbox-img" src="" alt="">
+    <video class="lightbox-content" id="lightbox-video" controls style="display: none;">
+      <source id="lightbox-video-source" src="" type="video/mp4">
+    </video>
+  </div>
+
+  <script>
+    // State
+    let indexData = null;
+    let currentPostId = null;
+
+    // Gateway detection
+    function detectGateway() {
+      const hostname = window.location.hostname;
+      if (hostname.includes('arweave.net')) return 'https://arweave.net';
+      if (hostname.includes('.')) {
+        const parts = hostname.split('.');
+        if (parts.length >= 3) {
+          return `${window.location.protocol}//${parts.slice(1).join('.')}`;
+        }
+        return `${window.location.protocol}//${hostname}`;
+      }
+      return 'https://arweave.net';
+    }
+
+    const arweaveGateway = detectGateway();
+
+    function getMediaGateway() {
+      const hostname = window.location.hostname;
+      if (hostname.includes('ar.io')) return 'https://arweave.net';
+      return arweaveGateway;
+    }
+
+    // Escape HTML
+    function escapeHtml(text) {
+      if (!text) return '';
+      const map = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;' };
+      return text.replace(/[&<>"']/g, m => map[m]);
+    }
+
+    // Format date
+    function formatDate(dateString) {
+      const date = new Date(dateString);
+      return date.toLocaleString('en-US', {
+        month: 'short', day: 'numeric', year: 'numeric',
+        hour: 'numeric', minute: '2-digit'
+      });
+    }
+
+    // Format relative time
+    function formatRelativeDate(dateString) {
+      const date = new Date(dateString);
+      const now = new Date();
+      const diffMs = now - date;
+      const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
+      const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+
+      if (diffHours < 1) return 'Just now';
+      if (diffHours < 24) return `${diffHours}h ago`;
+      if (diffDays < 7) return `${diffDays}d ago`;
+      return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+    }
+
+    // Load index from the index_ undername
+    async function loadIndex() {
+      try {
+        // Fetch from index_elon-musk-said undername relative to current gateway
+        const hostname = window.location.hostname;
+        let indexUrl;
+
+        // Parse hostname: {arnsName}.{gateway} -> index_{arnsName}.{gateway}
+        const parts = hostname.split('.');
+        const arnsName = parts[0];
+        const gateway = parts.slice(1).join('.');
+        indexUrl = `${window.location.protocol}//index_${arnsName}.${gateway}/`;
+
+        console.log('Fetching index from:', indexUrl);
+        const response = await fetch(indexUrl);
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        indexData = await response.json();
+
+        document.getElementById('loading').style.display = 'none';
+
+        // Check for hash route
+        handleHashRoute();
+
+      } catch (error) {
+        console.error('Failed to load index:', error);
+        document.getElementById('loading').style.display = 'none';
+        document.getElementById('error').style.display = 'block';
+      }
+    }
+
+    // Handle hash routing
+    function handleHashRoute() {
+      const hash = window.location.hash;
+
+      if (hash && hash.startsWith('#/')) {
+        const postId = hash.substring(2);
+        if (postId) {
+          showPost(postId);
+          return;
+        }
+      }
+
+      showPostList();
+    }
+
+    // Show post list
+    function showPostList() {
+      window.location.hash = '';
+      currentPostId = null;
+
+      document.getElementById('post-list-view').style.display = 'block';
+      document.getElementById('single-post').classList.remove('active');
+
+      renderPostList();
+    }
+
+    // Render post list
+    function renderPostList() {
+      if (!indexData || !indexData.posts) return;
+
+      const listEl = document.getElementById('post-list');
+      const posts = indexData.posts;
+
+      if (posts.length === 0) {
+        listEl.innerHTML = '<div class="loading">No posts archived yet</div>';
+        return;
+      }
+
+      listEl.innerHTML = posts.map(post => `
+        <div class="post-card" onclick="showPost('${post.postId}')">
+          <div class="post-date">${formatRelativeDate(post.createdAt)}</div>
+          <div class="post-text">${escapeHtml(post.text)}</div>
+          <div class="post-meta">
+            ${post.mediaCount > 0 ? `<span>📷 ${post.mediaCount}</span>` : ''}
+            ${post.hasVideo ? '<span>🎬</span>' : ''}
+          </div>
+        </div>
+      `).join('');
+
+      // Update stats
+      const statsEl = document.getElementById('stats');
+      statsEl.innerHTML = `
+        <span class="stats-number">${posts.length}</span>
+        posts archived
+        <br>
+        <small>Last updated ${formatDate(indexData.metadata?.lastUpdated || new Date())}</small>
+      `;
+    }
+
+    // Show single post
+    async function showPost(postId) {
+      window.location.hash = `/${postId}`;
+      currentPostId = postId;
+
+      document.getElementById('post-list-view').style.display = 'none';
+      document.getElementById('single-post').classList.add('active');
+
+      const contentEl = document.getElementById('post-content');
+      contentEl.innerHTML = '<div class="loading"><div class="spinner"></div><div>Loading post...</div></div>';
+
+      // Find post in index
+      const postIndex = indexData.posts.find(p => p.postId === postId);
+      if (!postIndex || !postIndex.manifestTxId) {
+        contentEl.innerHTML = '<div class="error">Post not found</div>';
+        return;
+      }
+
+      try {
+        // Fetch metadata from manifest
+        const metadataUrl = `${arweaveGateway}/${postIndex.metadataTxId}`;
+        const response = await fetch(metadataUrl);
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+
+        const metadata = await response.json();
+        renderSinglePost(metadata, postIndex);
+
+      } catch (error) {
+        console.error('Failed to load post:', error);
+        contentEl.innerHTML = `<div class="error">Failed to load post: ${error.message}</div>`;
+      }
+    }
+
+    // Verified badge HTML
+    const verifiedBadgeSmall = `<span class="verified-badge"><svg viewBox="0 0 22 22" aria-label="Verified account"><path d="M20.396 11c-.018-.646-.215-1.275-.57-1.816-.354-.54-.852-.972-1.438-1.246.223-.607.27-1.264.14-1.897-.131-.634-.437-1.218-.882-1.687-.47-.445-1.053-.75-1.687-.882-.633-.13-1.29-.083-1.897.14-.273-.587-.704-1.086-1.245-1.44S11.647 1.62 11 1.604c-.646.017-1.273.213-1.813.568s-.969.854-1.24 1.44c-.608-.223-1.267-.272-1.902-.14-.635.13-1.22.436-1.69.882-.445.47-.749 1.055-.878 1.688-.13.633-.08 1.29.144 1.896-.587.274-1.087.705-1.443 1.245-.356.54-.555 1.17-.574 1.817.02.647.218 1.276.574 1.817.356.54.856.972 1.443 1.245-.224.606-.274 1.263-.144 1.896.13.634.433 1.218.877 1.688.47.443 1.054.747 1.687.878.633.132 1.29.084 1.897-.136.274.586.705 1.084 1.246 1.439.54.354 1.17.551 1.816.569.647-.016 1.276-.213 1.817-.567s.972-.854 1.245-1.44c.604.239 1.266.296 1.903.164.636-.132 1.22-.447 1.68-.907.46-.46.776-1.044.908-1.681s.075-1.299-.165-1.903c.586-.274 1.084-.705 1.439-1.246.354-.54.551-1.17.569-1.816zM9.662 14.85l-3.429-3.428 1.293-1.302 2.072 2.072 4.4-4.794 1.347 1.246z"></path></svg></span>`;
+
+    // Render single post
+    function renderSinglePost(metadata, postIndex) {
+      const tweet = metadata.rawApiResponse?.tweet || {};
+      const display = metadata.display || {};
+      const archive = metadata.archive || {};
+
+      const text = tweet.text || display.text || '';
+      const createdAt = tweet.created_at || display.createdAt;
+
+      // Generate media HTML
+      let mediaHTML = '';
+      if (archive.media && archive.media.length > 0) {
+        const count = archive.media.length;
+        let gridClass = 'single';
+        if (count === 2) gridClass = 'double';
+        else if (count === 3) gridClass = 'triple';
+        else if (count >= 4) gridClass = 'quad';
+
+        const mediaItems = archive.media.slice(0, 4).map((media, index) => {
+          const spanFull = (count === 3 && index === 0) ? ' span-full' : '';
+          const mediaSrc = `${getMediaGateway()}/${media.txId}`;
+
+          if (media.type === 'photo' || media.type === 'link') {
+            return `<div class="media-item${spanFull}" onclick="openLightbox('${mediaSrc}', 'image')">
+              <img src="${mediaSrc}" alt="${escapeHtml(media.alt_text || '')}">
+            </div>`;
+          } else if (media.type === 'video' || media.type === 'animated_gif') {
+            const attrs = media.type === 'animated_gif' ? 'autoplay loop muted playsinline' : 'controls playsinline';
+            return `<div class="media-item${spanFull}" onclick="openLightbox('${mediaSrc}', 'video')">
+              <video ${attrs}><source src="${mediaSrc}" type="video/mp4"></video>
+            </div>`;
+          }
+          return '';
+        }).join('');
+
+        mediaHTML = `<div class="media-grid ${gridClass}">${mediaItems}</div>`;
+      }
+
+      const html = `
+        <div class="tweet-header">
+          <div class="user-info">
+            <span class="username">Elon Musk ${verifiedBadgeSmall}</span>
+          </div>
+          <span class="date">${formatDate(createdAt)}</span>
+        </div>
+
+        <div class="tweet-text">${escapeHtml(text)}</div>
+
+        ${mediaHTML}
+
+        <div class="archive-footer">
+          <div class="request-info">
+            <strong>Post ID:</strong> ${postIndex.postId}<br>
+            <strong>Archived:</strong> ${formatDate(postIndex.processedAt)}<br>
+            <strong>Original:</strong> <a href="https://x.com/elonmusk/status/${postIndex.postId}" target="_blank">View on X</a><br>
+            <strong>Manifest:</strong> <a href="https://viewblock.io/arweave/tx/${postIndex.manifestTxId}" target="_blank">${postIndex.manifestTxId.substring(0, 16)}...</a>
+          </div>
+        </div>
+      `;
+
+      document.getElementById('post-content').innerHTML = html;
+    }
+
+    // Lightbox functions
+    function openLightbox(src, type) {
+      const lightbox = document.getElementById('lightbox');
+      const img = document.getElementById('lightbox-img');
+      const video = document.getElementById('lightbox-video');
+      const videoSource = document.getElementById('lightbox-video-source');
+
+      if (type === 'video') {
+        img.style.display = 'none';
+        video.style.display = 'block';
+        videoSource.src = src;
+        video.load();
+        video.play().catch(() => {});
+      } else {
+        video.style.display = 'none';
+        img.style.display = 'block';
+        img.src = src;
+      }
+
+      lightbox.classList.add('active');
+      document.body.style.overflow = 'hidden';
+    }
+
+    function closeLightbox(event) {
+      if (event.target.classList.contains('lightbox-content')) return;
+
+      const lightbox = document.getElementById('lightbox');
+      const video = document.getElementById('lightbox-video');
+
+      lightbox.classList.remove('active');
+      document.body.style.overflow = '';
+      video.pause();
+    }
+
+    // Handle hash changes
+    window.addEventListener('hashchange', handleHashRoute);
+
+    // Handle escape key
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') {
+        const lightbox = document.getElementById('lightbox');
+        if (lightbox.classList.contains('active')) {
+          closeLightbox({ target: lightbox });
+        } else if (currentPostId) {
+          showPostList();
+        }
+      }
+    });
+
+    // Initialize
+    document.addEventListener('DOMContentLoaded', loadIndex);
+  </script>
+</body>
+</html>

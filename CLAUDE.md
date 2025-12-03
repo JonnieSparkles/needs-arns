@@ -16,8 +16,9 @@ The bot uses Turbo SDK for fast Arweave uploads and supports shared credits conf
 ### Running the Bot
 ```bash
 npm install              # Install dependencies
-npm start               # Start bot (polls Twitter every POLL_INTERVAL_MINUTES)
-npm run manual          # Interactive manual mode (bypass polling, always creates archives)
+npm start               # Start mention bot (polls Twitter mentions)
+npm run manual          # Interactive manual mode (bypass polling)
+npm run watch           # Watch mode (monitors specific accounts)
 ```
 
 ### Tools & Utilities
@@ -47,6 +48,15 @@ The codebase follows a clean modular architecture with **zero code duplication**
 - **`mentions.js`** - Mention processing: `fetchParentTweet`, `fetchParentUser`, `isUserAllowed`, `extractCommandFromMention`, error handlers
 - **`state.js`** - State persistence: `saveProcessedState`, `loadProcessedState`
 - **`manifest.js`** - Arweave manifest generation (`generateManifest`)
+- **`quota.js`** - User quota tracking: tier management (free/pro/enterprise), monthly usage limits, `checkQuota`, `incrementUsage`
+
+### Watch Mode Modules (`lib/watch-*.js`)
+
+- **`watch-config.js`** - Configuration loading/validation for watched accounts
+- **`watch-state.js`** - State persistence (last processed tweet ID per account)
+- **`watch-timeline.js`** - Timeline polling, filtering original posts
+- **`watch-archive.js`** - Archive creation, index management, landing page updates
+- **`watch-filter.js`** - Engagement filtering with tier presets (ultra-whale, large-whale, medium, small)
 
 ### Template System (`response-templates/`)
 
@@ -74,17 +84,18 @@ Each mention file contains:
 
 ### Entry Points
 
-- **`index.js`** - Main bot: polls Twitter, processes mentions, handles webhooks
+- **`index.js`** - Main mention bot: polls Twitter mentions, processes commands
 - **`manual.js`** - Interactive mode: manual uploads, tweet extraction, reply preview
+- **`watch.js`** - Watch mode: monitors specific accounts, archives their posts automatically
 
 ## Key Technical Patterns
 
 ### ArNS Record Updates
 
 When updating ArNS records via `@ar.io/sdk`:
-- **Always include `owner` field** when updating records
 - **TTL limits**: 60-86400 seconds (enforced by ArNS)
 - **Timeout handling**: `createUndernameRecord` uses 120s timeout with verification fallback
+- If timeout occurs, the code verifies whether the record was actually created via `ant.getRecords()`
 
 ### Error Categorization
 
@@ -97,16 +108,19 @@ Use `isInfrastructureErrorType(err)` to determine if error should skip user noti
 ### Turbo Uploads & Shared Credits
 
 ```javascript
-// Shared credits are automatically used when enabled
+// Get Turbo client (singleton)
 const turbo = getTurboClient(jwk);
-const balance = await getTurboBalanceWithShared(turbo, walletAddress);
 
-// Preflight check before uploads
-const cost = await estimateUploadCostWinc(turbo, files);
-await assertSufficientCredits(turbo, walletAddress, cost);
+// Check balance including shared credits
+const balance = await getTurboBalanceWithShared(turbo);
+// Returns: { nativeWinc, sharedWinc, totalWinc, receivedApprovals }
 
-// Upload with shared credits (automatic priority order)
-const result = await uploadToArweave(turbo, buffer, contentType, tags);
+// Estimate cost and validate before upload
+const estimatedWinc = await estimateUploadCostWinc(turbo, byteCount);
+assertSufficientCredits(estimatedWinc, balance);
+
+// Upload (jwk required, handles shared credits internally)
+const txId = await uploadToArweave(buffer, contentType, 'App-Name', jwk);
 ```
 
 **Shared credits configuration** in `.env`:
@@ -193,14 +207,15 @@ node tools/test-turbo-credits.js  # Check balance and shared credits
 
 - **ArNS SDK**: https://github.com/ar-io/ar-io-sdk (v3.20.0+)
   - Methods: `ANT.init()`, `setUndernameRecord()`, `getRecords()`, `getRecord()`
-  - Note: Always include `owner` field, TTL limits 60-86400 seconds
+  - TTL limits: 60-86400 seconds
 
 - **Turbo SDK**: https://github.com/ardriveapp/turbo-sdk (v1.31.1)
-  - Methods: `TurboFactory.authenticated()`, `uploadFile()`, `getBalance()`
-  - Note: Requires credits from ardrive.io/turbo, use `fileStreamFactory` and `fileSizeFactory`
+  - Methods: `TurboFactory.authenticated()`, `uploadFile()`, `getBalance()`, `getUploadCosts()`
+  - Requires credits from ardrive.io/turbo
+  - Use `fileStreamFactory` and `fileSizeFactory` for `uploadFile()`
 
 - **Twitter API**: https://github.com/PLhery/node-twitter-api-v2 (v1.16.0)
-  - Methods: `v2.get()`, `v2.reply()`, `v2.retweet()`
+  - Methods: `v2.userMentionTimeline()`, `v2.reply()`, `v2.retweet()`
 
 ## Deployment
 
@@ -227,3 +242,112 @@ Also compatible with: Heroku, Vercel, DigitalOcean, AWS, GCP, Azure
 - `processed_mentions.json` - Deduplication and audit trail
 - `archive/metadata/archive-index.json` - Master archive index
 - `archive/mentions/{id}.json` - Individual mention data
+- `users.json` - Quota tracking per user (tier, monthly usage, lifetime stats)
+
+## User Quota System
+
+The bot includes a tiered quota system (`lib/quota.js`):
+
+**Tiers:**
+- `free`: 5 assignments/month
+- `pro`: 100 assignments/month
+- `enterprise`: 500 assignments/month
+
+**Commands:**
+- `@NeedsArNS usage` - Users can check their usage stats
+
+**Currently in test mode** - quota is tracked but not enforced (`testMode = true` in `checkQuota`).
+
+## Watch Mode
+
+Watch mode (`npm run watch`) monitors specific Twitter accounts and automatically archives their posts to Arweave.
+
+### How It Works
+
+1. Configure accounts in `watch-config.json`
+2. Bot polls each account's timeline every 30 minutes
+3. New original posts (not replies/retweets) are archived
+4. Each account gets a dedicated ArNS name with landing page
+5. Bot replies to posts with archive link (configurable)
+
+### URL Structure
+
+Uses hash-based routing for efficiency:
+```
+account-said.ar.io          → Landing page (lists all posts)
+account-said.ar.io/#/123    → Deep link to specific post
+index_account-said.ar.io    → JSON index of all posts
+```
+
+### Configuration (`watch-config.json`)
+
+```json
+{
+  "version": "1.0",
+  "pollIntervalMinutes": 30,
+  "accounts": [
+    {
+      "twitterUsername": "elonmusk",
+      "twitterUserId": "44196397",
+      "arnsName": "elon-musk-said",
+      "antProcessId": "YOUR_ANT_PROCESS_ID",
+      "enabled": true,
+      "replyToPost": true,
+      "filtering": {
+        "enabled": true,
+        "tier": "large-whale",
+        "alwaysArchiveMedia": true,
+        "archiveSelfReplies": true
+      }
+    }
+  ]
+}
+```
+
+### Engagement Filtering Tiers
+
+When `filtering.enabled: true`, posts must meet engagement thresholds:
+- **ultra-whale**: 500K impressions, 5K likes, 500 replies/retweets
+- **large-whale**: 100K impressions, 1K likes, 100 replies/retweets
+- **medium**: 10K impressions, 100 likes, 10 replies/retweets
+- **small**: 1K impressions, 10 likes, 5 replies/retweets
+- **none**: Archive all posts (default)
+
+### Environment Variables (Watch Mode)
+
+**Required:**
+- `WATCH_LANDING_TEMPLATE_TXID` - TXID of uploaded `watch-landing-template.html`
+- `WATCH_POST_TEMPLATE_TXID` or `TEMPLATE_HTML_TXID` - TXID of post template
+
+**Optional:**
+- `WATCH_CONFIG_PATH` - Path to config file (default: `./watch-config.json`)
+- `WATCH_PORT` - Health server port (default: 3001)
+
+### Watch Mode Archive Structure
+
+```
+watch-archive/
+├── {arnsName}/
+│   ├── metadata/
+│   │   └── index.json        # Landing page index
+│   └── posts/
+│       └── {postId}.json     # Individual post archives
+```
+
+### State Files
+
+- `watch-state.json` - Tracks `lastProcessedTweetId` per account
+
+### Adding a New Watched Account
+
+1. Get Twitter user ID (use Twitter API or lookup tool)
+2. Create ArNS name and get ANT process ID
+3. Add account to `watch-config.json`
+4. Restart watch mode: `npm run watch`
+
+### Debug Endpoint
+
+`GET http://localhost:3001/debug` shows:
+- Configured accounts
+- Archive statistics
+- Template TXIDs

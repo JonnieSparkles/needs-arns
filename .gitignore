@@ -15,3 +15,13 @@ processed_mentions.json
 archive.json
 OLD-archive.json
 archive/
+users.json
+
+# watch mode state/data
+watch-config.json
+watch-state.json
+watch-pending-state.json
+watch-archive/
+
+# logs
+logs/
