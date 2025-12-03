@@ -13,6 +13,7 @@ import { fetchParentTweet, fetchParentUser, isUserAllowed, extractCommandFromMen
 import { saveProcessedState, loadProcessedState } from './lib/state.js';
 import { renderTemplate } from './response-templates/loader.js';
 import { generateManifest } from './lib/manifest.js';
+import { checkQuota, incrementUsage, getUserStats, getQuotaMessage } from './lib/quota.js';
 
 // ---------- config & env ----------
 
@@ -99,7 +100,41 @@ async function handleMention(twitterClient, mention, includes) {
   const mentionUsername = author?.username || 'unknown';
   
   try {
-    // Check format FIRST - if it's not a valid command, completely ignore
+    // Check for usage command FIRST (doesn't need parent tweet)
+    const mentionText = (mention.text || '').toLowerCase().trim();
+    if (/@needsarns\s+usage\b/i.test(mentionText)) {
+      console.log(`📊 Usage query from @${mentionUsername}`);
+      const stats = getUserStats(authorId);
+
+      if (stats) {
+        const percentUsed = Math.round((stats.used / stats.limit) * 100);
+        const periodEnd = new Date(stats.periodEnd).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+
+        const usageMsg = `📊 Your Usage Stats\n\n` +
+          `Tier: ${stats.tierName}\n` +
+          `This Month: ${stats.used}/${stats.limit} (${percentUsed}%)\n` +
+          `Remaining: ${stats.remaining}\n` +
+          `Lifetime: ${stats.lifetime}\n` +
+          `Resets: ${periodEnd}\n\n` +
+          `${stats.tier === 'free' ? '💡 Upgrade to Pro for 100/month!' : '✨ Thank you for supporting @NeedsArNS!'}`;
+
+        await reply(twitterClient, mention.id, usageMsg);
+        console.log(`✅ Sent usage stats to @${mentionUsername}`);
+      } else {
+        // New user
+        const welcomeMsg = `👋 Welcome to @NeedsArNS!\n\n` +
+          `You have 5 free assignments per month.\n\n` +
+          `Usage: Reply to any tweet with:\n` +
+          `@NeedsArNS assign <name>\n\n` +
+          `Check usage anytime: @NeedsArNS usage`;
+
+        await reply(twitterClient, mention.id, welcomeMsg);
+        console.log(`✅ Sent welcome message to @${mentionUsername}`);
+      }
+      return;
+    }
+
+    // Check format - if it's not a valid command, completely ignore
     const command = extractCommandFromMention(mention.text || '');
     if (!command) {
       // Silently ignore - don't log, don't process, don't track
@@ -119,7 +154,14 @@ async function handleMention(twitterClient, mention, includes) {
     
     const requestedUndername = command.undername;
     console.log(`🏷️ Requested undername: ${requestedUndername}`);
-    
+
+    // Check user quota (test mode - tracking only, not blocking)
+    const quotaCheck = checkQuota(authorId, mentionUsername, true);
+    console.log(`📊 Quota check for @${mentionUsername}: ${quotaCheck.used}/${quotaCheck.limit} used (${quotaCheck.remaining} remaining) [${quotaCheck.tier} tier]`);
+    if (quotaCheck.testMode && !quotaCheck.allowed) {
+      console.log(`⚠️  [TEST MODE] User would be blocked, but allowing for testing`);
+    }
+
     // Check if requested undername already exists BEFORE processing media
     let undername = requestedUndername;
     let isFallback = false;
@@ -249,15 +291,35 @@ async function handleMention(twitterClient, mention, includes) {
       // Wait 1 minute before replying (keeps existing pacing)
       console.log('⏳ Waiting 1 minute before replying...');
       await new Promise(resolve => setTimeout(resolve, 60000));
-      
+
       const replyTweetId = await reply(twitterClient, mention.id, msg || `🎉 ${undername}_${ROOT_ARNS_NAME}.ar.io → ${existingTxId}`);
-      
+
+      if (!replyTweetId) {
+        console.error(`❌ Failed to send reply to @${mentionUsername} for ${undername}`);
+      } else {
+        console.log(`✅ Successfully replied to @${mentionUsername} for ${undername}`);
+
+        // Track usage (test mode - logs only)
+        const usage = incrementUsage(authorId, undername);
+        if (usage) {
+          console.log(`📈 Usage updated: ${usage.used}/${usage.limit} this month, ${usage.lifetime} lifetime`);
+
+          // Check if we should show a quota message
+          const quotaMsg = getQuotaMessage(authorId);
+          if (quotaMsg) {
+            console.log(`💬 [INFO] Would append to reply:${quotaMsg}`);
+          }
+        }
+      }
+
       // Retweet the success message to promote the assignment
       if (replyTweetId && ENABLE_RETWEETS) {
         console.log('🔄 Retweeting success message...');
         await retweet(twitterClient, replyTweetId, BOT_USER_ID);
       } else if (replyTweetId && !ENABLE_RETWEETS) {
         console.log('📝 Retweets disabled via ENABLE_RETWEETS=false');
+      } else if (!replyTweetId) {
+        console.log('⚠️ Skipping retweet because reply failed');
       }
       
       return;
@@ -426,21 +488,53 @@ async function handleMention(twitterClient, mention, includes) {
       }
       console.log('⚠️ Template loading failed, using fallback message');
       const replyTweetId = await reply(twitterClient, mention.id, fallbackMsg);
+
+      if (!replyTweetId) {
+        console.error(`❌ Failed to send fallback reply to @${mentionUsername} for ${undername}`);
+      } else {
+        console.log(`✅ Successfully sent fallback reply to @${mentionUsername} for ${undername}`);
+
+        // Track usage (test mode - logs only)
+        const usage = incrementUsage(authorId, undername);
+        if (usage) {
+          console.log(`📈 Usage updated: ${usage.used}/${usage.limit} this month, ${usage.lifetime} lifetime`);
+
+          // Check if we should show a quota message
+          const quotaMsg = getQuotaMessage(authorId);
+          if (quotaMsg) {
+            console.log(`💬 [INFO] Would append to reply:${quotaMsg}`);
+          }
+        }
+      }
       return;
     }
-    
+
     // Wait 1 minute before replying
     console.log('⏳ Waiting 1 minute before replying...');
     await new Promise(resolve => setTimeout(resolve, 60000));
-    
+
     const replyTweetId = await reply(twitterClient, mention.id, msg);
-    
+
+    if (!replyTweetId) {
+      console.error(`❌ Failed to send archive reply to @${mentionUsername} for ${undername}`);
+    } else {
+      console.log(`✅ Successfully sent archive reply to @${mentionUsername} for ${undername}`);
+
+      // Track usage (test mode - logs only)
+      const usage = incrementUsage(authorId, undername);
+      if (usage) {
+        console.log(`📈 Usage updated: ${usage.used}/${usage.limit} this month, ${usage.lifetime} lifetime`);
+      }
+    }
+
     // Retweet the success message to promote the archived content
     if (replyTweetId && ENABLE_RETWEETS) {
       console.log('🔄 Retweeting success message...');
       await retweet(twitterClient, replyTweetId, BOT_USER_ID);
     } else if (replyTweetId && !ENABLE_RETWEETS) {
       console.log('📝 Retweets disabled via ENABLE_RETWEETS=false');
+    } else if (!replyTweetId) {
+      console.log('⚠️ Skipping retweet because reply failed');
     }
   } catch (err) {
     console.error('handleMention error:', err?.message || err);
