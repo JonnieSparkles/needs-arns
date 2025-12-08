@@ -600,15 +600,24 @@ async function pollMentionsForever() {
     try {
       // On first poll, don't use since_id to catch all recent mentions
       const actualSinceId = isFirstPoll ? undefined : sinceId;
-      console.log(`🔍 Fetching mentions since_id: ${actualSinceId || 'none'}${isFirstPoll ? ' (first poll - getting all recent)' : ''}`);
-    const res = await twitter.v2.userMentionTimeline(BOT_USER_ID, {
-      since_id: actualSinceId,
-      'tweet.fields': ['referenced_tweets', 'created_at', 'entities', 'text', 'author_id', 'attachments', 'public_metrics', 'lang', 'possibly_sensitive', 'conversation_id'],
-      expansions: ['referenced_tweets.id', 'author_id', 'attachments.media_keys', 'referenced_tweets.id.attachments.media_keys'],
-      'user.fields': ['username', 'name', 'verified', 'public_metrics', 'created_at', 'description'],
-      'media.fields': ['type', 'url', 'preview_image_url', 'width', 'height', 'variants', 'public_metrics', 'alt_text'],
-      max_results: 100
-    });
+      console.log(`🔍 Searching for mentions${actualSinceId ? ` since_id: ${actualSinceId}` : ' (first poll - getting all recent)'}...`);
+
+      // Use Search API instead of userMentionTimeline - more reliable for real-time mentions
+      // Search for tweets mentioning @NeedsArNS, excluding retweets (we want original mentions only)
+      const searchParams = {
+        'tweet.fields': ['referenced_tweets', 'created_at', 'entities', 'text', 'author_id', 'attachments', 'public_metrics', 'lang', 'possibly_sensitive', 'conversation_id'],
+        expansions: ['referenced_tweets.id', 'author_id', 'attachments.media_keys', 'referenced_tweets.id.attachments.media_keys'],
+        'user.fields': ['username', 'name', 'verified', 'public_metrics', 'created_at', 'description'],
+        'media.fields': ['type', 'url', 'preview_image_url', 'width', 'height', 'variants', 'public_metrics', 'alt_text'],
+        max_results: 100
+      };
+
+      // Add since_id if we have one (to only get new mentions)
+      if (actualSinceId) {
+        searchParams.since_id = actualSinceId;
+      }
+
+      const res = await twitter.v2.search('@NeedsArNS -is:retweet', searchParams);
       console.log(`📊 API Response: ${res._realData?.data?.length || 0} mentions found`);
 
       // Debug: Log the raw API response (only if VERBOSE_LOGGING is enabled)

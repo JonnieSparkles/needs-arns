@@ -54,9 +54,9 @@
     /* Header */
     .header {
       text-align: center;
-      padding: 32px 0;
+      padding: 24px 0 16px 0;
       border-bottom: 1px solid #2f3336;
-      margin-bottom: 24px;
+      margin-bottom: 0;
     }
 
     .profile-photo {
@@ -157,43 +157,133 @@
       background-color: #080808;
     }
 
-    .post-card .post-date {
-      font-size: 13px;
+    .post-card .post-header {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 12px;
+    }
+
+    .post-card .post-avatar {
+      width: 40px;
+      height: 40px;
+      border-radius: 50%;
+      object-fit: cover;
+    }
+
+    .post-card .post-user {
+      display: flex;
+      flex-direction: column;
+      flex: 1;
+    }
+
+    .post-card .post-username {
+      font-weight: 700;
+      font-size: 15px;
+      color: #ffffff;
+    }
+
+    .post-card .post-handle {
+      font-size: 14px;
       color: #71767a;
-      margin-bottom: 8px;
+    }
+
+    .post-card .post-date {
+      font-size: 14px;
+      color: #71767a;
     }
 
     .post-card .post-text {
       font-size: 15px;
+      line-height: 1.5;
       margin-bottom: 12px;
       white-space: pre-wrap;
       word-wrap: break-word;
-      display: -webkit-box;
-      -webkit-line-clamp: 4;
-      -webkit-box-orient: vertical;
-      overflow: hidden;
     }
 
-    .post-card .post-meta {
+    .post-card .post-media {
+      margin-bottom: 12px;
+      border-radius: 16px;
+      overflow: hidden;
+      background-color: #16181c;
+    }
+
+    .post-card .post-media img,
+    .post-card .post-media video {
+      width: 100%;
+      max-height: 400px;
+      object-fit: cover;
+      display: block;
+    }
+
+    .post-card .post-media .media-error {
+      padding: 40px;
+      text-align: center;
+      color: #71767a;
+      font-size: 14px;
+    }
+
+    .post-card .post-footer {
       display: flex;
-      gap: 16px;
+      justify-content: space-between;
+      align-items: center;
+      padding-top: 12px;
+      border-top: 1px solid #2f3336;
+    }
+
+    .post-card .post-meta-item {
       font-size: 13px;
       color: #71767a;
     }
 
-    .post-card .post-meta span {
-      display: flex;
-      align-items: center;
-      gap: 4px;
+    .post-card .post-view-link {
+      font-size: 13px;
+      color: #1d9bf0;
+      font-weight: 500;
+    }
+
+    /* Load more button */
+    .load-more-container {
+      text-align: center;
+      padding: 24px 16px;
+      border-bottom: 1px solid #2f3336;
+    }
+
+    .load-more-btn {
+      background-color: transparent;
+      color: #1d9bf0;
+      border: 1px solid #1d9bf0;
+      padding: 12px 24px;
+      border-radius: 9999px;
+      font-size: 15px;
+      font-weight: 700;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .load-more-btn:hover {
+      background-color: rgba(29, 155, 240, 0.1);
+    }
+
+    .load-more-btn:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+
+    .loading-batch {
+      text-align: center;
+      padding: 20px;
+      color: #71767a;
+      font-size: 14px;
     }
 
     /* Stats */
     .stats {
       text-align: center;
-      padding: 24px 16px;
+      padding: 12px 16px;
       color: #71767a;
       font-size: 14px;
-      border-top: 1px solid #2f3336;
+      border-bottom: 1px solid #2f3336;
     }
 
     .stats-number {
@@ -429,8 +519,11 @@
 
     <!-- Post list view -->
     <div class="post-list-view" id="post-list-view" style="display: none;">
-      <div class="post-list" id="post-list"></div>
       <div class="stats" id="stats"></div>
+      <div class="post-list" id="post-list"></div>
+      <div class="load-more-container" id="load-more-container" style="display: none;">
+        <button class="load-more-btn" id="load-more-btn" onclick="loadMorePosts()">Load More</button>
+      </div>
     </div>
 
     <!-- Single post view -->
@@ -459,8 +552,81 @@
     // State
     let indexData = null;
     let currentPostId = null;
+    let currentPage = 0;
+    let isLoadingMore = false;
+    const POSTS_PER_PAGE = 10;
+    const metadataCache = new Map(); // Cache fetched metadata
 
-    // Gateway detection
+    // ========== Base64URL to Base32 conversion for sandbox subdomains ==========
+    // Arweave transaction IDs need to be converted to sandbox subdomains for ar.io gateways
+
+    // Base64URL alphabet
+    const B64_ALPHABET = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_';
+
+    // Base32 alphabet (lowercase, RFC 4648)
+    const B32_ALPHABET = 'abcdefghijklmnopqrstuvwxyz234567';
+
+    // Convert base64url string to Uint8Array
+    function fromB64Url(b64url) {
+      const b64 = b64url.replace(/-/g, '+').replace(/_/g, '/');
+      const padded = b64 + '='.repeat((4 - b64.length % 4) % 4);
+      const binary = atob(padded);
+      const bytes = new Uint8Array(binary.length);
+      for (let i = 0; i < binary.length; i++) {
+        bytes[i] = binary.charCodeAt(i);
+      }
+      return bytes;
+    }
+
+    // Convert Uint8Array to base32 string
+    function toB32(bytes) {
+      let bits = 0;
+      let value = 0;
+      let output = '';
+
+      for (let i = 0; i < bytes.length; i++) {
+        value = (value << 8) | bytes[i];
+        bits += 8;
+
+        while (bits >= 5) {
+          output += B32_ALPHABET[(value >>> (bits - 5)) & 31];
+          bits -= 5;
+        }
+      }
+
+      if (bits > 0) {
+        output += B32_ALPHABET[(value << (5 - bits)) & 31];
+      }
+
+      return output;
+    }
+
+    // Generate sandbox subdomain for a transaction ID
+    function txToSandbox(txId) {
+      return toB32(fromB64Url(txId));
+    }
+
+    // ========== Gateway detection ==========
+
+    // Get the base gateway domain (e.g., "ar.io" from "elon-musk-said.ar.io")
+    function getBaseGateway() {
+      const hostname = window.location.hostname;
+      const parts = hostname.split('.');
+      // Remove the ArNS name to get base gateway
+      if (parts.length >= 3) {
+        return parts.slice(-2).join('.'); // e.g., "ar.io"
+      }
+      return hostname;
+    }
+
+    // Build sandboxed URL for a transaction ID
+    function getSandboxedUrl(txId) {
+      const sandbox = txToSandbox(txId);
+      const baseGateway = getBaseGateway();
+      return `${window.location.protocol}//${sandbox}.${baseGateway}/${txId}`;
+    }
+
+    // Gateway detection for non-sandboxed requests
     function detectGateway() {
       const hostname = window.location.hostname;
       if (hostname.includes('arweave.net')) return 'https://arweave.net';
@@ -476,10 +642,9 @@
 
     const arweaveGateway = detectGateway();
 
-    function getMediaGateway() {
-      const hostname = window.location.hostname;
-      if (hostname.includes('ar.io')) return 'https://arweave.net';
-      return arweaveGateway;
+    // Get URL for a transaction ID (uses sandbox subdomain)
+    function getTxUrl(txId) {
+      return getSandboxedUrl(txId);
     }
 
     // Escape HTML
@@ -487,6 +652,38 @@
       if (!text) return '';
       const map = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;' };
       return text.replace(/[&<>"']/g, m => map[m]);
+    }
+
+    // Remove t.co media links from tweet text
+    // Media links point to /photo/ or /video/ and should be stripped since we show the media separately
+    function cleanTweetText(text, entities) {
+      if (!text) return '';
+      if (!entities || !entities.urls || entities.urls.length === 0) {
+        return text;
+      }
+
+      let cleanedText = text;
+
+      entities.urls.forEach(urlEntity => {
+        const expandedUrl = urlEntity.expanded_url || '';
+        const tcoUrl = urlEntity.url;
+
+        // Check if this is a Twitter media link
+        const isMediaLink = /\/status\/\d+\/(photo|video)\/\d+/i.test(expandedUrl) ||
+                            /^https?:\/\/(pic\.)?x\.com\//i.test(expandedUrl);
+
+        if (isMediaLink) {
+          // Remove the t.co URL entirely
+          const escaped = tcoUrl.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+          cleanedText = cleanedText.replace(new RegExp('\\s*' + escaped + '\\s*', 'g'), ' ').trim();
+        } else {
+          // Replace t.co with expanded URL for user links
+          cleanedText = cleanedText.replace(tcoUrl, expandedUrl);
+        }
+      });
+
+      // Clean up extra whitespace
+      return cleanedText.replace(/\s+/g, ' ').trim();
     }
 
     // Format date
@@ -561,44 +758,193 @@
     function showPostList() {
       window.location.hash = '';
       currentPostId = null;
+      currentPage = 0;
 
       document.getElementById('post-list-view').style.display = 'block';
       document.getElementById('single-post').classList.remove('active');
 
-      renderPostList();
+      renderPostList(true);
     }
 
-    // Render post list
-    function renderPostList() {
+    // Fetch metadata for a post
+    async function fetchPostMetadata(post) {
+      // Check cache first
+      if (metadataCache.has(post.postId)) {
+        return metadataCache.get(post.postId);
+      }
+
+      try {
+        const metadataUrl = getTxUrl(post.metadataTxId);
+        const response = await fetch(metadataUrl);
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+
+        const metadata = await response.json();
+
+        // Extract what we need
+        const tweet = metadata.rawApiResponse?.tweet || {};
+        const archive = metadata.archive || {};
+        const entities = tweet.entities || null;
+
+        // Clean the text - remove t.co media links
+        const rawText = tweet.text || post.text || '';
+        const cleanedText = cleanTweetText(rawText, entities);
+
+        const result = {
+          text: cleanedText,
+          media: archive.media || [],
+          createdAt: tweet.created_at || post.createdAt
+        };
+
+        // Cache it
+        metadataCache.set(post.postId, result);
+        return result;
+      } catch (error) {
+        console.error(`Failed to fetch metadata for ${post.postId}:`, error);
+        // Return fallback data
+        return {
+          text: post.text || 'Content unavailable',
+          media: [],
+          createdAt: post.createdAt
+        };
+      }
+    }
+
+    // Render a single post card with full content
+    function renderPostCard(post, metadata) {
+      const text = metadata.text || '';
+      const hasMedia = metadata.media && metadata.media.length > 0;
+      const firstMedia = hasMedia ? metadata.media[0] : null;
+
+      // Build media preview HTML
+      let mediaPreviewHtml = '';
+      if (firstMedia) {
+        const mediaSrc = getTxUrl(firstMedia.txId);
+        if (firstMedia.type === 'video' || firstMedia.type === 'animated_gif') {
+          mediaPreviewHtml = `
+            <div class="post-media">
+              <video src="${mediaSrc}" controls playsinline preload="metadata"
+                     onerror="this.parentElement.innerHTML='<div class=\\'media-error\\'>Video unavailable</div>'">
+              </video>
+            </div>`;
+        } else {
+          mediaPreviewHtml = `
+            <div class="post-media">
+              <img src="${mediaSrc}" alt="" loading="lazy"
+                   onerror="this.parentElement.innerHTML='<div class=\\'media-error\\'>Image unavailable</div>'">
+            </div>`;
+        }
+      }
+
+      return `
+        <div class="post-card" onclick="showPost('${post.postId}')">
+          <div class="post-header">
+            <img class="post-avatar" src="./profile-photo.jpg" alt="">
+            <div class="post-user">
+              <span class="post-username">Elon Musk</span>
+              <span class="post-handle">@elonmusk</span>
+            </div>
+            <span class="post-date">${formatRelativeDate(post.createdAt)}</span>
+          </div>
+          <div class="post-text">${escapeHtml(text)}</div>
+          ${mediaPreviewHtml}
+          <div class="post-footer">
+            <span class="post-meta-item">
+              ${hasMedia ? `📷 ${metadata.media.length}` : ''}
+              ${post.hasVideo ? ' 🎬' : ''}
+            </span>
+            <span class="post-view-link">View archive →</span>
+          </div>
+        </div>
+      `;
+    }
+
+    // Render post list with pagination
+    async function renderPostList(reset = false) {
       if (!indexData || !indexData.posts) return;
 
       const listEl = document.getElementById('post-list');
-      const posts = indexData.posts;
+      const statsEl = document.getElementById('stats');
+      const loadMoreEl = document.getElementById('load-more-container');
 
-      if (posts.length === 0) {
+      // Sort posts newest first
+      const sortedPosts = [...indexData.posts].sort((a, b) =>
+        new Date(b.createdAt) - new Date(a.createdAt)
+      );
+
+      if (sortedPosts.length === 0) {
         listEl.innerHTML = '<div class="loading">No posts archived yet</div>';
+        loadMoreEl.style.display = 'none';
+        statsEl.innerHTML = `
+          <span class="stats-number">0</span>
+          posts archived
+        `;
         return;
       }
 
-      listEl.innerHTML = posts.map(post => `
-        <div class="post-card" onclick="showPost('${post.postId}')">
-          <div class="post-date">${formatRelativeDate(post.createdAt)}</div>
-          <div class="post-text">${escapeHtml(post.text)}</div>
-          <div class="post-meta">
-            ${post.mediaCount > 0 ? `<span>📷 ${post.mediaCount}</span>` : ''}
-            ${post.hasVideo ? '<span>🎬</span>' : ''}
-          </div>
-        </div>
-      `).join('');
+      if (reset) {
+        currentPage = 0;
+        listEl.innerHTML = '';
+      }
+
+      // Get posts for current page
+      const startIdx = currentPage * POSTS_PER_PAGE;
+      const endIdx = startIdx + POSTS_PER_PAGE;
+      const pagePosts = sortedPosts.slice(startIdx, endIdx);
+      const hasMore = endIdx < sortedPosts.length;
+
+      // Show loading indicator for this batch
+      const loadingId = `loading-${currentPage}`;
+      listEl.innerHTML += `<div id="${loadingId}" class="loading-batch">Loading posts...</div>`;
+
+      // Fetch metadata and render each post
+      for (const post of pagePosts) {
+        const metadata = await fetchPostMetadata(post);
+        const cardHtml = renderPostCard(post, metadata);
+
+        // Insert before the loading indicator
+        const loadingEl = document.getElementById(loadingId);
+        if (loadingEl) {
+          loadingEl.insertAdjacentHTML('beforebegin', cardHtml);
+        }
+      }
+
+      // Remove loading indicator
+      const loadingEl = document.getElementById(loadingId);
+      if (loadingEl) loadingEl.remove();
 
       // Update stats
-      const statsEl = document.getElementById('stats');
       statsEl.innerHTML = `
-        <span class="stats-number">${posts.length}</span>
+        <span class="stats-number">${sortedPosts.length}</span>
         posts archived
         <br>
         <small>Last updated ${formatDate(indexData.metadata?.lastUpdated || new Date())}</small>
       `;
+
+      // Show/hide load more button
+      if (hasMore) {
+        loadMoreEl.style.display = 'block';
+        const remaining = sortedPosts.length - endIdx;
+        document.getElementById('load-more-btn').textContent = `Load More (${remaining} remaining)`;
+      } else {
+        loadMoreEl.style.display = 'none';
+      }
+
+      isLoadingMore = false;
+    }
+
+    // Load more posts
+    async function loadMorePosts() {
+      if (isLoadingMore) return;
+      isLoadingMore = true;
+
+      const btn = document.getElementById('load-more-btn');
+      btn.disabled = true;
+      btn.textContent = 'Loading...';
+
+      currentPage++;
+      await renderPostList(false);
+
+      btn.disabled = false;
     }
 
     // Show single post
@@ -620,8 +966,9 @@
       }
 
       try {
-        // Fetch metadata from manifest
-        const metadataUrl = `${arweaveGateway}/${postIndex.metadataTxId}`;
+        // Fetch metadata using sandboxed URL
+        const metadataUrl = getTxUrl(postIndex.metadataTxId);
+        console.log('Fetching metadata from:', metadataUrl);
         const response = await fetch(metadataUrl);
         if (!response.ok) throw new Error(`HTTP ${response.status}`);
 
@@ -642,8 +989,11 @@
       const tweet = metadata.rawApiResponse?.tweet || {};
       const display = metadata.display || {};
       const archive = metadata.archive || {};
+      const entities = tweet.entities || null;
 
-      const text = tweet.text || display.text || '';
+      // Clean the text - remove t.co media links
+      const rawText = tweet.text || display.text || '';
+      const text = cleanTweetText(rawText, entities);
       const createdAt = tweet.created_at || display.createdAt;
 
       // Generate media HTML
@@ -657,7 +1007,7 @@
 
         const mediaItems = archive.media.slice(0, 4).map((media, index) => {
           const spanFull = (count === 3 && index === 0) ? ' span-full' : '';
-          const mediaSrc = `${getMediaGateway()}/${media.txId}`;
+          const mediaSrc = getTxUrl(media.txId);
 
           if (media.type === 'photo' || media.type === 'link') {
             return `<div class="media-item${spanFull}" onclick="openLightbox('${mediaSrc}', 'image')">

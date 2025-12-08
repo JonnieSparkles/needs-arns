@@ -143,7 +143,8 @@ async function archivePost(tweet, account, includes, ant, index) {
     account,
     includes,
     jwk,
-    WATCH_POST_TEMPLATE_TXID
+    WATCH_POST_TEMPLATE_TXID,
+    twitter // Pass Twitter client for fetching quoted tweets
   );
 
   if (archiveResult.success) {

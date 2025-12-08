@@ -43,9 +43,9 @@
     /* Header */
     .header {
       text-align: center;
-      padding: 24px 0;
+      padding: 24px 0 16px 0;
       border-bottom: 1px solid #2f3336;
-      margin-bottom: 24px;
+      margin-bottom: 0;
     }
 
     .header h1 {
@@ -143,20 +143,121 @@
       color: #71767a;
     }
 
-    .post-card .post-meta span {
+    .post-card .post-header {
       display: flex;
       align-items: center;
-      gap: 4px;
+      gap: 10px;
+      margin-bottom: 12px;
+    }
+
+    .post-card .post-avatar {
+      width: 40px;
+      height: 40px;
+      border-radius: 50%;
+      object-fit: cover;
+      background-color: #2f3336;
+    }
+
+    .post-card .post-user {
+      display: flex;
+      flex-direction: column;
+      flex: 1;
+    }
+
+    .post-card .post-username {
+      font-weight: 700;
+      font-size: 15px;
+      color: #ffffff;
+    }
+
+    .post-card .post-handle {
+      font-size: 14px;
+      color: #71767a;
+    }
+
+    .post-card .post-media {
+      margin-bottom: 12px;
+      border-radius: 16px;
+      overflow: hidden;
+      background-color: #16181c;
+    }
+
+    .post-card .post-media img,
+    .post-card .post-media video {
+      width: 100%;
+      max-height: 400px;
+      object-fit: cover;
+      display: block;
+    }
+
+    .post-card .post-media .media-error {
+      padding: 40px;
+      text-align: center;
+      color: #71767a;
+      font-size: 14px;
+    }
+
+    .post-card .post-footer {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding-top: 12px;
+      border-top: 1px solid #2f3336;
+    }
+
+    .post-card .post-meta-item {
+      font-size: 13px;
+      color: #71767a;
+    }
+
+    .post-card .post-view-link {
+      font-size: 13px;
+      color: #1d9bf0;
+      font-weight: 500;
+    }
+
+    /* Load more button */
+    .load-more-container {
+      text-align: center;
+      padding: 24px 16px;
+    }
+
+    .load-more-btn {
+      background-color: transparent;
+      color: #1d9bf0;
+      border: 1px solid #1d9bf0;
+      padding: 12px 24px;
+      border-radius: 9999px;
+      font-size: 15px;
+      font-weight: 700;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .load-more-btn:hover {
+      background-color: rgba(29, 155, 240, 0.1);
+    }
+
+    .load-more-btn:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+
+    .loading-batch {
+      text-align: center;
+      padding: 20px;
+      color: #71767a;
+      font-size: 14px;
     }
 
     /* Stats */
     .stats {
       text-align: center;
-      padding: 16px;
+      padding: 12px 16px;
       color: #71767a;
       font-size: 14px;
-      border-top: 1px solid #2f3336;
-      margin-top: 24px;
+      border-bottom: 1px solid #2f3336;
+      margin-bottom: 16px;
     }
 
     /* Back button */
@@ -350,8 +451,11 @@
 
     <!-- Post list view -->
     <div class="post-list-view" id="post-list-view" style="display: none;">
-      <div class="post-list" id="post-list"></div>
       <div class="stats" id="stats"></div>
+      <div class="post-list" id="post-list"></div>
+      <div class="load-more-container" id="load-more-container" style="display: none;">
+        <button class="load-more-btn" id="load-more-btn" onclick="loadMorePosts()">Load More</button>
+      </div>
     </div>
 
     <!-- Single post view -->
@@ -376,37 +480,107 @@
     // State
     let indexData = null;
     let currentPostId = null;
+    let currentPage = 0;
+    let isLoadingMore = false;
+    const POSTS_PER_PAGE = 10;
+    const metadataCache = new Map();
 
-    // Gateway detection
-    function detectGateway() {
-      const hostname = window.location.hostname;
-      if (hostname.includes('arweave.net')) return 'https://arweave.net';
-      if (hostname.includes('.')) {
-        const parts = hostname.split('.');
-        if (parts.length >= 3) {
-          return `${window.location.protocol}//${parts.slice(1).join('.')}`;
-        }
-        return `${window.location.protocol}//${hostname}`;
+    // ========== Base64URL to Base32 conversion for sandbox subdomains ==========
+    const B64_ALPHABET = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_';
+    const B32_ALPHABET = 'abcdefghijklmnopqrstuvwxyz234567';
+
+    function fromB64Url(b64url) {
+      const b64 = b64url.replace(/-/g, '+').replace(/_/g, '/');
+      const padded = b64 + '='.repeat((4 - b64.length % 4) % 4);
+      const binary = atob(padded);
+      const bytes = new Uint8Array(binary.length);
+      for (let i = 0; i < binary.length; i++) {
+        bytes[i] = binary.charCodeAt(i);
       }
-      return 'https://arweave.net';
+      return bytes;
     }
 
-    const arweaveGateway = detectGateway();
+    function toB32(bytes) {
+      let bits = 0;
+      let value = 0;
+      let output = '';
+      for (let i = 0; i < bytes.length; i++) {
+        value = (value << 8) | bytes[i];
+        bits += 8;
+        while (bits >= 5) {
+          output += B32_ALPHABET[(value >>> (bits - 5)) & 31];
+          bits -= 5;
+        }
+      }
+      if (bits > 0) {
+        output += B32_ALPHABET[(value << (5 - bits)) & 31];
+      }
+      return output;
+    }
 
-    function getMediaGateway() {
+    function txToSandbox(txId) {
+      return toB32(fromB64Url(txId));
+    }
+
+    // ========== Gateway detection ==========
+    function getBaseGateway() {
       const hostname = window.location.hostname;
-      if (hostname.includes('ar.io')) return 'https://arweave.net';
-      return arweaveGateway;
+      const parts = hostname.split('.');
+      if (parts.length >= 3) {
+        return parts.slice(-2).join('.');
+      }
+      return hostname;
     }
 
-    // Escape HTML
+    function getSandboxedUrl(txId) {
+      const sandbox = txToSandbox(txId);
+      const baseGateway = getBaseGateway();
+      return `${window.location.protocol}//${sandbox}.${baseGateway}/${txId}`;
+    }
+
+    function getTxUrl(txId) {
+      return getSandboxedUrl(txId);
+    }
+
+    // ========== Utilities ==========
     function escapeHtml(text) {
       if (!text) return '';
       const map = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;' };
       return text.replace(/[&<>"']/g, m => map[m]);
     }
 
-    // Format date
+    // Remove t.co media links from tweet text
+    // Media links point to /photo/ or /video/ and should be stripped since we show the media separately
+    function cleanTweetText(text, entities) {
+      if (!text) return '';
+      if (!entities || !entities.urls || entities.urls.length === 0) {
+        return text;
+      }
+
+      let cleanedText = text;
+
+      entities.urls.forEach(urlEntity => {
+        const expandedUrl = urlEntity.expanded_url || '';
+        const tcoUrl = urlEntity.url;
+
+        // Check if this is a Twitter media link
+        const isMediaLink = /\/status\/\d+\/(photo|video)\/\d+/i.test(expandedUrl) ||
+                            /^https?:\/\/(pic\.)?x\.com\//i.test(expandedUrl);
+
+        if (isMediaLink) {
+          // Remove the t.co URL entirely
+          const escaped = tcoUrl.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+          cleanedText = cleanedText.replace(new RegExp('\\s*' + escaped + '\\s*', 'g'), ' ').trim();
+        } else {
+          // Replace t.co with expanded URL for user links
+          cleanedText = cleanedText.replace(tcoUrl, expandedUrl);
+        }
+      });
+
+      // Clean up extra whitespace
+      return cleanedText.replace(/\s+/g, ' ').trim();
+    }
+
     function formatDate(dateString) {
       const date = new Date(dateString);
       return date.toLocaleString('en-US', {
@@ -415,39 +589,43 @@
       });
     }
 
-    // Load index from the index_ undername
+    function formatRelativeDate(dateString) {
+      const date = new Date(dateString);
+      const now = new Date();
+      const diffMs = now - date;
+      const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
+      const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+      if (diffHours < 1) return 'Just now';
+      if (diffHours < 24) return `${diffHours}h ago`;
+      if (diffDays < 7) return `${diffDays}d ago`;
+      return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+    }
+
+    // ========== Index loading ==========
     async function loadIndex() {
       try {
-        // Fetch from index_ undername relative to current gateway
         const hostname = window.location.hostname;
-        let indexUrl;
-
-        // Parse hostname: {arnsName}.{gateway} -> index_{arnsName}.{gateway}
         const parts = hostname.split('.');
         const arnsName = parts[0];
         const gateway = parts.slice(1).join('.');
-        indexUrl = `${window.location.protocol}//index_${arnsName}.${gateway}/`;
+        const indexUrl = `${window.location.protocol}//index_${arnsName}.${gateway}/`;
 
         console.log('Fetching index from:', indexUrl);
         const response = await fetch(indexUrl);
         if (!response.ok) throw new Error(`HTTP ${response.status}`);
         indexData = await response.json();
 
-        // Update page title and account info
+        // Update page title and account info from index metadata
         if (indexData.metadata) {
           const username = indexData.metadata.watchedAccount;
           document.getElementById('page-title').textContent = `@${username} Archive`;
           document.title = `@${username} Archive`;
           document.getElementById('tagline').innerHTML = `What <a href="https://x.com/${username}" target="_blank">@${username}</a> said — archived forever.`;
-
-          // Update meta tags
           document.getElementById('og-title').content = `@${username} Archive`;
           document.getElementById('twitter-title').content = `@${username} Archive`;
         }
 
         document.getElementById('loading').style.display = 'none';
-
-        // Check for hash route
         handleHashRoute();
 
       } catch (error) {
@@ -457,10 +635,9 @@
       }
     }
 
-    // Handle hash routing
+    // ========== Routing ==========
     function handleHashRoute() {
       const hash = window.location.hash;
-
       if (hash && hash.startsWith('#/')) {
         const postId = hash.substring(2);
         if (postId) {
@@ -468,50 +645,176 @@
           return;
         }
       }
-
       showPostList();
     }
 
-    // Show post list
+    // ========== Post List ==========
     function showPostList() {
       window.location.hash = '';
       currentPostId = null;
+      currentPage = 0;
 
       document.getElementById('post-list-view').style.display = 'block';
       document.getElementById('single-post').classList.remove('active');
 
-      renderPostList();
+      renderPostList(true);
     }
 
-    // Render post list
-    function renderPostList() {
+    async function fetchPostMetadata(post) {
+      if (metadataCache.has(post.postId)) {
+        return metadataCache.get(post.postId);
+      }
+
+      try {
+        const metadataUrl = getTxUrl(post.metadataTxId);
+        const response = await fetch(metadataUrl);
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+
+        const metadata = await response.json();
+        const tweet = metadata.rawApiResponse?.tweet || {};
+        const archive = metadata.archive || {};
+        const entities = tweet.entities || null;
+
+        // Clean the text - remove t.co media links
+        const rawText = tweet.text || post.text || '';
+        const cleanedText = cleanTweetText(rawText, entities);
+
+        const result = {
+          text: cleanedText,
+          media: archive.media || [],
+          createdAt: tweet.created_at || post.createdAt
+        };
+
+        metadataCache.set(post.postId, result);
+        return result;
+      } catch (error) {
+        console.error(`Failed to fetch metadata for ${post.postId}:`, error);
+        return {
+          text: post.text || 'Content unavailable',
+          media: [],
+          createdAt: post.createdAt
+        };
+      }
+    }
+
+    function renderPostCard(post, metadata) {
+      const username = indexData.metadata?.watchedAccount || 'unknown';
+      const text = metadata.text || '';
+      const hasMedia = metadata.media && metadata.media.length > 0;
+      const firstMedia = hasMedia ? metadata.media[0] : null;
+
+      let mediaPreviewHtml = '';
+      if (firstMedia) {
+        const mediaSrc = getTxUrl(firstMedia.txId);
+        if (firstMedia.type === 'video' || firstMedia.type === 'animated_gif') {
+          mediaPreviewHtml = `
+            <div class="post-media">
+              <video src="${mediaSrc}" controls playsinline preload="metadata"
+                     onerror="this.parentElement.innerHTML='<div class=\\'media-error\\'>Video unavailable</div>'">
+              </video>
+            </div>`;
+        } else {
+          mediaPreviewHtml = `
+            <div class="post-media">
+              <img src="${mediaSrc}" alt="" loading="lazy"
+                   onerror="this.parentElement.innerHTML='<div class=\\'media-error\\'>Image unavailable</div>'">
+            </div>`;
+        }
+      }
+
+      return `
+        <div class="post-card" onclick="showPost('${post.postId}')">
+          <div class="post-header">
+            <div class="post-avatar"></div>
+            <div class="post-user">
+              <span class="post-username">@${escapeHtml(username)}</span>
+            </div>
+            <span class="post-date">${formatRelativeDate(post.createdAt)}</span>
+          </div>
+          <div class="post-text">${escapeHtml(text)}</div>
+          ${mediaPreviewHtml}
+          <div class="post-footer">
+            <span class="post-meta-item">
+              ${hasMedia ? `📷 ${metadata.media.length}` : ''}
+              ${post.hasVideo ? ' 🎬' : ''}
+            </span>
+            <span class="post-view-link">View archive →</span>
+          </div>
+        </div>
+      `;
+    }
+
+    async function renderPostList(reset = false) {
       if (!indexData || !indexData.posts) return;
 
       const listEl = document.getElementById('post-list');
-      const posts = indexData.posts;
+      const statsEl = document.getElementById('stats');
+      const loadMoreEl = document.getElementById('load-more-container');
 
-      if (posts.length === 0) {
+      const sortedPosts = [...indexData.posts].sort((a, b) =>
+        new Date(b.createdAt) - new Date(a.createdAt)
+      );
+
+      if (sortedPosts.length === 0) {
         listEl.innerHTML = '<div class="loading">No posts archived yet</div>';
+        loadMoreEl.style.display = 'none';
+        statsEl.textContent = '0 posts archived';
         return;
       }
 
-      listEl.innerHTML = posts.map(post => `
-        <div class="post-card" onclick="showPost('${post.postId}')">
-          <div class="post-date">${formatDate(post.createdAt)}</div>
-          <div class="post-text">${escapeHtml(post.text)}</div>
-          <div class="post-meta">
-            ${post.mediaCount > 0 ? `<span>📷 ${post.mediaCount} media</span>` : ''}
-            ${post.hasVideo ? '<span>🎬 Video</span>' : ''}
-          </div>
-        </div>
-      `).join('');
+      if (reset) {
+        currentPage = 0;
+        listEl.innerHTML = '';
+      }
 
-      // Update stats
-      document.getElementById('stats').textContent =
-        `${posts.length} post${posts.length !== 1 ? 's' : ''} archived • Last updated ${formatDate(indexData.metadata.lastUpdated)}`;
+      const startIdx = currentPage * POSTS_PER_PAGE;
+      const endIdx = startIdx + POSTS_PER_PAGE;
+      const pagePosts = sortedPosts.slice(startIdx, endIdx);
+      const hasMore = endIdx < sortedPosts.length;
+
+      const loadingId = `loading-${currentPage}`;
+      listEl.innerHTML += `<div id="${loadingId}" class="loading-batch">Loading posts...</div>`;
+
+      for (const post of pagePosts) {
+        const metadata = await fetchPostMetadata(post);
+        const cardHtml = renderPostCard(post, metadata);
+        const loadingEl = document.getElementById(loadingId);
+        if (loadingEl) {
+          loadingEl.insertAdjacentHTML('beforebegin', cardHtml);
+        }
+      }
+
+      const loadingEl = document.getElementById(loadingId);
+      if (loadingEl) loadingEl.remove();
+
+      statsEl.textContent = `${sortedPosts.length} post${sortedPosts.length !== 1 ? 's' : ''} archived • Last updated ${formatDate(indexData.metadata?.lastUpdated || new Date())}`;
+
+      if (hasMore) {
+        loadMoreEl.style.display = 'block';
+        const remaining = sortedPosts.length - endIdx;
+        document.getElementById('load-more-btn').textContent = `Load More (${remaining} remaining)`;
+      } else {
+        loadMoreEl.style.display = 'none';
+      }
+
+      isLoadingMore = false;
     }
 
-    // Show single post
+    async function loadMorePosts() {
+      if (isLoadingMore) return;
+      isLoadingMore = true;
+
+      const btn = document.getElementById('load-more-btn');
+      btn.disabled = true;
+      btn.textContent = 'Loading...';
+
+      currentPage++;
+      await renderPostList(false);
+
+      btn.disabled = false;
+    }
+
+    // ========== Single Post View ==========
     async function showPost(postId) {
       window.location.hash = `/${postId}`;
       currentPostId = postId;
@@ -522,7 +825,6 @@
       const contentEl = document.getElementById('post-content');
       contentEl.innerHTML = '<div class="loading"><div class="spinner"></div><div>Loading post...</div></div>';
 
-      // Find post in index
       const postIndex = indexData.posts.find(p => p.postId === postId);
       if (!postIndex || !postIndex.manifestTxId) {
         contentEl.innerHTML = '<div class="error">Post not found</div>';
@@ -530,8 +832,8 @@
       }
 
       try {
-        // Fetch metadata from manifest
-        const metadataUrl = `${arweaveGateway}/${postIndex.metadataTxId}`;
+        const metadataUrl = getTxUrl(postIndex.metadataTxId);
+        console.log('Fetching metadata from:', metadataUrl);
         const response = await fetch(metadataUrl);
         if (!response.ok) throw new Error(`HTTP ${response.status}`);
 
@@ -544,18 +846,18 @@
       }
     }
 
-    // Render single post
     function renderSinglePost(metadata, postIndex) {
       const tweet = metadata.rawApiResponse?.tweet || {};
       const display = metadata.display || {};
       const archive = metadata.archive || {};
-      const arnsName = metadata.metadata?.arnsName || '';
+      const entities = tweet.entities || null;
 
-      const username = display.username || metadata.metadata?.watchedAccount || 'unknown';
-      const text = tweet.text || display.text || '';
+      const username = display.username || indexData.metadata?.watchedAccount || 'unknown';
+      // Clean the text - remove t.co media links
+      const rawText = tweet.text || display.text || '';
+      const text = cleanTweetText(rawText, entities);
       const createdAt = tweet.created_at || display.createdAt;
 
-      // Generate media HTML
       let mediaHTML = '';
       if (archive.media && archive.media.length > 0) {
         const count = archive.media.length;
@@ -566,7 +868,7 @@
 
         const mediaItems = archive.media.slice(0, 4).map((media, index) => {
           const spanFull = (count === 3 && index === 0) ? ' span-full' : '';
-          const mediaSrc = `${getMediaGateway()}/${media.txId}`;
+          const mediaSrc = getTxUrl(media.txId);
 
           if (media.type === 'photo' || media.type === 'link') {
             return `<div class="media-item${spanFull}" onclick="openLightbox('${mediaSrc}', 'image')">
@@ -610,7 +912,7 @@
       document.getElementById('post-content').innerHTML = html;
     }
 
-    // Lightbox functions
+    // ========== Lightbox ==========
     function openLightbox(src, type) {
       const lightbox = document.getElementById('lightbox');
       const img = document.getElementById('lightbox-img');
@@ -644,10 +946,9 @@
       video.pause();
     }
 
-    // Handle hash changes
+    // ========== Event Listeners ==========
     window.addEventListener('hashchange', handleHashRoute);
 
-    // Handle escape key
     document.addEventListener('keydown', (e) => {
       if (e.key === 'Escape') {
         const lightbox = document.getElementById('lightbox');
@@ -659,7 +960,6 @@
       }
     });
 
-    // Initialize
     document.addEventListener('DOMContentLoaded', loadIndex);
   </script>
 </body>

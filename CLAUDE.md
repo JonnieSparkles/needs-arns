@@ -57,6 +57,7 @@ The codebase follows a clean modular architecture with **zero code duplication**
 - **`watch-timeline.js`** - Timeline polling, filtering original posts
 - **`watch-archive.js`** - Archive creation, index management, landing page updates
 - **`watch-filter.js`** - Engagement filtering with tier presets (ultra-whale, large-whale, medium, small)
+- **`watch-pending.js`** - Pending queue management for two-phase engagement filtering: `createPendingEntry`, `addToPending`, `removeFromPending`, `getPendingPosts`, `updatePendingMetrics`
 
 ### Template System (`response-templates/`)
 
@@ -305,6 +306,7 @@ index_account-said.ar.io    → JSON index of all posts (updated each cycle)
       "filtering": {
         "enabled": true,
         "tier": "large-whale",
+        "pendingMaxAgeHours": 48,
         "alwaysArchiveMedia": true,
         "archiveSelfReplies": true
       }
@@ -321,6 +323,17 @@ When `filtering.enabled: true`, posts must meet engagement thresholds:
 - **medium**: 10K impressions, 100 likes, 10 replies/retweets
 - **small**: 1K impressions, 10 likes, 5 replies/retweets
 - **none**: Archive all posts (default)
+
+### Two-Phase Filtering
+
+Posts that don't immediately meet engagement thresholds enter a **pending queue**:
+1. **Detection**: New posts are evaluated against tier thresholds
+2. **Immediate archive**: Posts with media (if `alwaysArchiveMedia: true`) or meeting thresholds are archived immediately
+3. **Pending queue**: Posts below thresholds are added to the pending queue
+4. **Re-evaluation**: Each poll cycle re-fetches metrics for pending posts
+5. **Promotion**: Posts that meet thresholds are archived; expired posts (default 48h) are discarded
+
+This allows high-engagement posts to be archived even if they start with low engagement.
 
 ### Environment Variables (Watch Mode)
 
@@ -357,6 +370,7 @@ watch-archive/
 ### State Files
 
 - `watch-state.json` - Tracks `lastProcessedTweetId` per account
+- `watch-pending-state.json` - Pending queue for posts awaiting engagement thresholds (two-phase filtering)
 
 ### Adding a New Watched Account
 

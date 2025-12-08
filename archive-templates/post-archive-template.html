@@ -270,6 +270,100 @@
       color: #ffffff;
       text-decoration: underline;
     }
+
+    /* Quoted tweet styles */
+    .quoted-tweet {
+      margin: 12px 0;
+      border: 1px solid #2f3336;
+      border-radius: 16px;
+      padding: 12px;
+      background-color: #000000;
+    }
+
+    .quoted-tweet-header {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 8px;
+    }
+
+    .quoted-tweet-avatar {
+      width: 24px;
+      height: 24px;
+      border-radius: 50%;
+      background-color: #2f3336;
+    }
+
+    .quoted-tweet-username {
+      font-weight: 700;
+      font-size: 14px;
+      color: #ffffff;
+    }
+
+    .quoted-tweet-handle {
+      font-size: 14px;
+      color: #71767a;
+    }
+
+    .quoted-tweet-text {
+      font-size: 14px;
+      line-height: 1.4;
+      color: #e7e9ea;
+      margin-bottom: 8px;
+      white-space: pre-wrap;
+      word-wrap: break-word;
+    }
+
+    .quoted-tweet-media {
+      margin-top: 8px;
+      border-radius: 12px;
+      overflow: hidden;
+      position: relative;
+    }
+
+    .quoted-tweet-media img,
+    .quoted-tweet-media video {
+      width: 100%;
+      max-height: 300px;
+      object-fit: cover;
+      display: block;
+    }
+
+    .quoted-tweet-media .play-icon {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      font-size: 32px;
+      opacity: 0.8;
+      pointer-events: none;
+    }
+
+    .quoted-tweet-footer {
+      margin-top: 8px;
+      font-size: 12px;
+      color: #71767a;
+    }
+
+    .quoted-tweet-footer a {
+      color: #71767a;
+      text-decoration: none;
+    }
+
+    .quoted-tweet-footer a:hover {
+      color: #ffffff;
+      text-decoration: underline;
+    }
+
+    .quoted-tweet-unavailable {
+      padding: 16px;
+      text-align: center;
+      color: #71767a;
+      font-size: 14px;
+      border: 1px dashed #2f3336;
+      border-radius: 12px;
+      margin: 12px 0;
+    }
     
     /* Lightbox styles */
     .lightbox {
@@ -399,6 +493,59 @@
   </div>
 
   <script>
+    // ========== Base64URL to Base32 conversion for sandbox subdomains ==========
+    const B32_ALPHABET = 'abcdefghijklmnopqrstuvwxyz234567';
+
+    function fromB64Url(b64url) {
+      const b64 = b64url.replace(/-/g, '+').replace(/_/g, '/');
+      const padded = b64 + '='.repeat((4 - b64.length % 4) % 4);
+      const binary = atob(padded);
+      const bytes = new Uint8Array(binary.length);
+      for (let i = 0; i < binary.length; i++) {
+        bytes[i] = binary.charCodeAt(i);
+      }
+      return bytes;
+    }
+
+    function toB32(bytes) {
+      let bits = 0;
+      let value = 0;
+      let output = '';
+      for (let i = 0; i < bytes.length; i++) {
+        value = (value << 8) | bytes[i];
+        bits += 8;
+        while (bits >= 5) {
+          output += B32_ALPHABET[(value >>> (bits - 5)) & 31];
+          bits -= 5;
+        }
+      }
+      if (bits > 0) {
+        output += B32_ALPHABET[(value << (5 - bits)) & 31];
+      }
+      return output;
+    }
+
+    function txToSandbox(txId) {
+      return toB32(fromB64Url(txId));
+    }
+
+    // Get base gateway domain (e.g., "ar.io" from "something.ar.io")
+    function getBaseGateway() {
+      const hostname = window.location.hostname;
+      const parts = hostname.split('.');
+      if (parts.length >= 2) {
+        return parts.slice(-2).join('.');
+      }
+      return hostname;
+    }
+
+    // Build sandboxed URL for a transaction ID
+    function getTxUrl(txId) {
+      const sandbox = txToSandbox(txId);
+      const baseGateway = getBaseGateway();
+      return `${window.location.protocol}//${sandbox}.${baseGateway}/${txId}`;
+    }
+
     // Detect current gateway from hostname (same logic as homepage)
     function detectGateway() {
       const hostname = window.location.hostname;
@@ -535,7 +682,7 @@
       
       mediaArray.slice(0, 4).forEach((media, index) => {
         const spanFull = (count === 3 && index === 0) ? ' span-full' : '';
-        const mediaSrc = `${getMediaGateway()}/${media.txId}`;
+        const mediaSrc = getTxUrl(media.txId);
         
         if (media.type === 'photo') {
           const escapedSrc = mediaSrc.replace(/'/g, "\\'");
@@ -652,11 +799,89 @@
       return expandedText;
     }
     
+    // Generate quoted tweet HTML
+    function generateQuotedTweetHTML(quotedTweetData) {
+      if (!quotedTweetData || !quotedTweetData.tweet) {
+        return '';
+      }
+
+      const { tweet, author, media } = quotedTweetData;
+      const username = author?.username || 'unknown';
+      const displayName = author?.name || username;
+      const text = tweet.text || '';
+      const profileImage = author?.profile_image_url || '';
+
+      // Generate media preview if available
+      // Media array now contains Arweave txIds from our upload
+      let mediaHTML = '';
+      if (media && media.length > 0) {
+        const firstMedia = media[0];
+        // Use Arweave txId if available, otherwise fall back to original URL
+        const mediaSrc = firstMedia.txId ? getTxUrl(firstMedia.txId) : (firstMedia.url || firstMedia.preview_image_url);
+
+        if (mediaSrc) {
+          if (firstMedia.type === 'photo') {
+            mediaHTML = `
+              <div class="quoted-tweet-media">
+                <img src="${mediaSrc}" alt="${escapeHtml(firstMedia.alt_text || '')}"
+                     onerror="this.parentElement.style.display='none'">
+              </div>`;
+          } else if (firstMedia.type === 'video' || firstMedia.type === 'animated_gif') {
+            // For videos, show video player or preview
+            if (firstMedia.txId) {
+              // We have video uploaded to Arweave
+              const isGif = firstMedia.type === 'animated_gif';
+              const videoAttrs = isGif ? 'autoplay loop muted playsinline' : 'controls playsinline preload="metadata"';
+              mediaHTML = `
+                <div class="quoted-tweet-media">
+                  <video ${videoAttrs} style="width: 100%; max-height: 300px; object-fit: cover;"
+                         onerror="this.parentElement.style.display='none'">
+                    <source src="${mediaSrc}" type="video/mp4">
+                  </video>
+                </div>`;
+            } else {
+              // Fallback to preview image
+              const previewUrl = firstMedia.preview_image_url;
+              if (previewUrl) {
+                mediaHTML = `
+                  <div class="quoted-tweet-media">
+                    <img src="${previewUrl}" alt="Video preview"
+                         onerror="this.parentElement.style.display='none'">
+                    <div class="play-icon">▶️</div>
+                  </div>`;
+              }
+            }
+          }
+        }
+      }
+
+      // Avatar HTML - profile images still use Twitter URLs (not uploaded to Arweave)
+      const avatarHTML = profileImage
+        ? `<img class="quoted-tweet-avatar" src="${profileImage}" alt="@${escapeHtml(username)}" onerror="this.style.display='none'">`
+        : `<div class="quoted-tweet-avatar"></div>`;
+
+      return `
+        <div class="quoted-tweet">
+          <div class="quoted-tweet-header">
+            ${avatarHTML}
+            <span class="quoted-tweet-username">${escapeHtml(displayName)}</span>
+            <span class="quoted-tweet-handle">@${escapeHtml(username)}</span>
+          </div>
+          <div class="quoted-tweet-text">${escapeHtml(text)}</div>
+          ${mediaHTML}
+          <div class="quoted-tweet-footer">
+            <a href="https://x.com/${escapeHtml(username)}/status/${tweet.id}" target="_blank">View original on X</a>
+          </div>
+        </div>
+      `;
+    }
+
     // Render tweet from metadata
     function renderTweet(metadata) {
-      const { rawApiResponse, archive } = metadata;
-      const mentionTweet = rawApiResponse.mentionTweet;
-      const parentTweet = rawApiResponse.parentTweet;
+      const { rawApiResponse, archive, quotedTweet } = metadata;
+      // Support both mention bot (parentTweet) and watch mode (tweet) structures
+      const mentionTweet = rawApiResponse.mentionTweet || null;
+      const parentTweet = rawApiResponse.parentTweet || rawApiResponse.tweet;
       const includes = rawApiResponse.includes || {};
       
       // Extract fields from raw API response
@@ -677,11 +902,11 @@
         }
       }
       
-      const mentionUsername = includes.users?.find(u => u.id === mentionTweet.author_id)?.username || 'unknown';
-      const parentText = parentTweet.text || '';
-      const parentCreatedAt = parentTweet.created_at || new Date().toISOString();
-      const mentionCreatedAt = mentionTweet.created_at || new Date().toISOString();
-      const parentEntities = parentTweet.entities || null;
+      const mentionUsername = mentionTweet ? (includes.users?.find(u => u.id === mentionTweet.author_id)?.username || 'unknown') : null;
+      const parentText = parentTweet?.text || '';
+      const parentCreatedAt = parentTweet?.created_at || new Date().toISOString();
+      const mentionCreatedAt = mentionTweet?.created_at || parentCreatedAt;
+      const parentEntities = parentTweet?.entities || null;
       
       const tweetDate = formatDate(parentCreatedAt);
       const mediaHTML = generateMediaGrid(archive.media);
@@ -705,15 +930,17 @@
         </div>
         
         <div class="tweet-text">${escapeHtml(expandedText)}</div>
-        
+
+        ${generateQuotedTweetHTML(quotedTweet)}
+
         ${mediaHTML}
-        
+
         <div class="archive-footer">
           <div>🏛️ Archived on Arweave via <a href="https://x.com/NeedsArNS" target="_blank">@NeedsArNS</a></div>
           <div class="request-info">
-            <strong>Requested by:</strong> @${escapeHtml(mentionUsername)}<br>
+            ${mentionUsername ? `<strong>Requested by:</strong> @${escapeHtml(mentionUsername)}<br>` : ''}
             <strong>Archived:</strong> ${requestDate}<br>
-            <strong>Original post:</strong> <a href="https://x.com/${escapeHtml(parentUsername)}/status/${parentTweet.id}" target="_blank">View on X/Twitter</a>${arnsLinkHtml}
+            <strong>Original post:</strong> <a href="https://x.com/${escapeHtml(parentUsername)}/status/${parentTweet?.id}" target="_blank">View on X/Twitter</a>${arnsLinkHtml}
           </div>
           <div style="margin-top: 8px; font-size: 12px; color: #71767a;">Archive v2.0.0</div>
         </div>
@@ -756,7 +983,7 @@
       
       // Set Open Graph and Twitter image to first media item if available
       if (archive.media && archive.media.length > 0 && archive.media[0].type === 'photo') {
-        const imageUrl = `${getMediaGateway()}/${archive.media[0].txId}`;
+        const imageUrl = getTxUrl(archive.media[0].txId);
         document.getElementById('og-image').setAttribute('content', imageUrl);
         document.getElementById('twitter-image').setAttribute('content', imageUrl);
       }
