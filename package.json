@@ -6,7 +6,8 @@
     "scripts": {
         "start": "node index.js",
         "manual": "node manual.js",
-        "watch": "node watch.js"
+        "watch": "node watch.js",
+        "watch:add-account": "node tools/add-watch-account.js"
     },
   "dependencies": {
     "@ar.io/sdk": "^3.20.0",

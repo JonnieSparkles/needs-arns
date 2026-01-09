@@ -1,0 +1,13 @@
+{
+  "type": "success-baseposting",
+  "description": "Success message when a post is archived via #baseposting",
+  "template": [
+    "Based. Permanently.",
+    "",
+    "https://baseposting.ar.io/#/{postId}",
+    "",
+    "Powered by @ar_io_network"
+  ],
+  "variables": ["postId"],
+  "maxLength": 280
+}

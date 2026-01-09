@@ -4,10 +4,15 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-**needs-arns** is a production-ready Twitter bot that assigns ArNS (Arweave Name Service) subdomains to Arweave content. It supports three command modes:
+**needs-arns** is a production-ready Twitter bot that assigns ArNS (Arweave Name Service) subdomains to Arweave content. It supports three modes:
 
-1. **`name this <subdomain>`** - Direct ArNS mapping without archival
-2. **`assign <subdomain>`** or **`archive <subdomain>`** - Creates complete tweet replica archive with manifest on Arweave
+1. **Mention Mode** (`npm start`) - Responds to @NeedsArNS mentions with commands:
+   - **`name this <subdomain>`** - Direct ArNS mapping without archival
+   - **`assign <subdomain>`** or **`archive <subdomain>`** - Creates complete tweet replica archive with manifest on Arweave
+
+2. **Watch Mode** (`npm run watch`) - Monitors specific accounts and automatically archives their posts:
+   - **Timeline-based**: Archives posts from a specific account's timeline
+   - **Search-based**: Archives posts matching a hashtag/mention query (e.g., `#baseposting`)
 
 The bot uses Turbo SDK for fast Arweave uploads and supports shared credits configuration.
 
@@ -29,6 +34,7 @@ node tools/update-template-from-archive.js 5        # Update template across arc
 node tools/refresh-single-mention.js               # Refresh single mention
 node tools/retry-arns-updates.js                   # Retry failed ArNS updates
 node tools/test-turbo-credits.js                   # Check Turbo credit balance
+npm run watch:add-account                          # Interactive: add new watched account
 ```
 
 All archive tools support `--dry-run` and `--force` flags. See `tools/ARCHIVE_SCRIPTS_README.md` for details.
@@ -52,10 +58,11 @@ The codebase follows a clean modular architecture with **zero code duplication**
 
 ### Watch Mode Modules (`lib/watch-*.js`)
 
-- **`watch-config.js`** - Configuration loading/validation for watched accounts
+- **`watch-config.js`** - Configuration loading/validation for watched accounts (supports both timeline and search-based)
 - **`watch-state.js`** - State persistence (last processed tweet ID per account)
-- **`watch-timeline.js`** - Timeline polling, filtering original posts
-- **`watch-archive.js`** - Archive creation, index management, landing page updates
+- **`watch-timeline.js`** - Timeline polling, filtering original posts (for timeline-based accounts)
+- **`watch-search.js`** - Search-based polling for hashtag/mention triggered archives (e.g., `#baseposting`)
+- **`watch-archive.js`** - Archive creation, index management, landing page updates, invoking user attribution
 - **`watch-filter.js`** - Engagement filtering with tier presets (ultra-whale, large-whale, medium, small)
 - **`watch-pending.js`** - Pending queue management for two-phase engagement filtering: `createPendingEntry`, `addToPending`, `removeFromPending`, `getPendingPosts`, `updatePendingMetrics`
 
@@ -64,6 +71,7 @@ The codebase follows a clean modular architecture with **zero code duplication**
 Centralized response templates with automatic truncation and variable substitution:
 - `loader.js` - Template rendering engine
 - `success-post-archive.json` - Full success message (falls back to truncated version if >280 chars)
+- `success-baseposting.json` - Reply for #baseposting community archives
 - `error-*.json` - Various error templates
 - All templates support `{variable}` placeholders
 
@@ -128,15 +136,15 @@ const txId = await uploadToArweave(buffer, contentType, 'App-Name', jwk);
 - `TURBO_USE_SHARED_CREDITS=true` - Enable auto-discovery
 - `TURBO_SHARED_CREDITS_PAID_BY=addr1,addr2` - Optional explicit payer addresses
 
-### Twitter API Efficiency
+### Twitter API
 
-The bot uses **single optimized API call per cycle** with expansions:
+The bot uses **Search API** (more reliable for real-time mentions than userMentionTimeline):
 ```javascript
-const mentions = await twitter.v2.get('users/:id/mentions', {
-  expansions: 'author_id,referenced_tweets.id,attachments.media_keys',
-  'tweet.fields': 'created_at,author_id,text,referenced_tweets,attachments',
-  'user.fields': 'username',
-  'media.fields': 'url,preview_image_url,type,variants,alt_text',
+const res = await twitter.v2.search('@NeedsArNS -is:retweet', {
+  'tweet.fields': ['referenced_tweets', 'created_at', 'author_id', 'attachments', 'public_metrics'],
+  expansions: ['referenced_tweets.id', 'author_id', 'attachments.media_keys'],
+  'user.fields': ['username', 'name'],
+  'media.fields': ['url', 'preview_image_url', 'type', 'variants', 'alt_text'],
 });
 ```
 
@@ -315,6 +323,57 @@ index_account-said.ar.io    → JSON index of all posts (updated each cycle)
 }
 ```
 
+### Source Types
+
+Watch mode supports two source types:
+
+**Timeline-based (`sourceType: "timeline"`)** - Default mode
+- Monitors a specific Twitter account's timeline
+- Requires `twitterUserId`
+- Archives original posts from that account
+
+**Search-based (`sourceType: "search"`)** - Community collections
+- Monitors tweets matching a search query (hashtag + mention)
+- Requires `searchQuery` instead of `twitterUserId`
+- Archives content that **anyone** can trigger by tweeting the hashtag
+- Tracks the "invoking user" who triggered the archive
+
+### Search-Based Archive Modes
+
+When using search-based watch mode, the bot determines what to archive based on the trigger tweet:
+
+1. **Reply mode**: User replies to a tweet with `@NeedsArNS #hashtag` → archives the **parent tweet**
+2. **Quote mode**: User quote-tweets with `@NeedsArNS #hashtag` → archives the **quoted tweet**
+3. **Original mode**: User tweets `@NeedsArNS #hashtag` directly → archives **their own tweet**
+
+The invoking user (who triggered the archive) is tracked separately from the content author.
+
+### Community Collection Example: #baseposting
+
+```json
+{
+  "twitterUsername": "baseposting",
+  "twitterUserId": null,
+  "arnsName": "baseposting",
+  "antProcessId": "Ev_sfiZeVqE_qr5M-8EXxYXlR8NkEiJT0c7qt_D2NQ8",
+  "enabled": true,
+  "replyToPost": true,
+  "sourceType": "search",
+  "searchQuery": "@NeedsArNS #baseposting -is:retweet",
+  "filtering": {
+    "enabled": true,
+    "tier": "none",
+    "thresholds": { "minImpressions": 0, "minLikes": 0 }
+  }
+}
+```
+
+This creates a community-curated archive at `baseposting.ar.io` where:
+- Anyone can archive content by tweeting `@NeedsArNS #baseposting`
+- The landing page shows a leaderboard of top contributors
+- Posts display both the content author and who archived it
+- Bot replies with "Based. Permanently." and the archive link
+
 ### Engagement Filtering Tiers
 
 When `filtering.enabled: true`, posts must meet engagement thresholds:
@@ -352,7 +411,16 @@ Account-specific landing pages can be created in `archive-templates/{account-nam
 archive-templates/elon-musk/
 ├── index.html           # Custom landing page
 └── profile-photo.jpg    # Profile photo (uploaded with manifest)
+
+archive-templates/baseposting/
+├── index.html           # Community collection with leaderboard
+└── profile-photo.jpg    # Collection branding
 ```
+
+The baseposting template includes:
+- Contributor leaderboard with click-to-filter functionality
+- Display of both content author and invoking user (who archived it)
+- Hash-based routing for individual posts (`#/postId`)
 
 Upload the folder as an Arweave manifest, then set as root ArNS record for the account.
 
@@ -374,6 +442,19 @@ watch-archive/
 
 ### Adding a New Watched Account
 
+**Interactive script (recommended):**
+```bash
+npm run watch:add-account
+```
+
+The script will:
+1. Look up Twitter user ID automatically
+2. Guide you through ArNS registration
+3. Help choose filtering tier
+4. Add account to `watch-config.json`
+5. Offer to restart watch mode if running via PM2
+
+**Manual process:**
 1. Get Twitter user ID (use Twitter API or lookup tool)
 2. Create ArNS name and get ANT process ID
 3. Add account to `watch-config.json`

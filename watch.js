@@ -18,6 +18,7 @@ import {
   getDefaultStatePath
 } from './lib/watch-state.js';
 import { pollAccountTimeline, formatTweetForLog } from './lib/watch-timeline.js';
+import { pollSearchResults, formatSearchResultForLog } from './lib/watch-search.js';
 import {
   archiveWatchedPost,
   loadWatchIndex,
@@ -137,24 +138,38 @@ function getAntInstance(account) {
 
 // ---------- archive a single post ----------
 
-async function archivePost(tweet, account, includes, ant, index) {
+/**
+ * Archive a single post
+ * @param {Object} tweet - Tweet object to archive
+ * @param {Object} account - Account configuration
+ * @param {Object} includes - API includes (users, media, tweets)
+ * @param {Object} ant - ANT instance
+ * @param {Object} index - In-memory index
+ * @param {Object} options - Optional parameters
+ * @param {Object} options.invokingUser - User who triggered the archive (for search-based accounts)
+ * @param {string} options.replyToTweetId - Tweet ID to reply to (defaults to tweet.id)
+ */
+async function archivePost(tweet, account, includes, ant, index, options = {}) {
+  const { invokingUser = null, replyToTweetId = tweet.id } = options;
+
   const archiveResult = await archiveWatchedPost(
     tweet,
     account,
     includes,
     jwk,
     WATCH_POST_TEMPLATE_TXID,
-    twitter // Pass Twitter client for fetching quoted tweets
+    twitter, // Pass Twitter client for fetching quoted tweets
+    invokingUser // Pass invoking user for search-based accounts
   );
 
   if (archiveResult.success) {
     // Add to in-memory index (no disk I/O)
-    addPostToIndexInMemory(index, account, archiveResult, tweet);
+    addPostToIndexInMemory(index, account, archiveResult, tweet, invokingUser);
 
     // Send reply if enabled
     if (account.replyToPost) {
-      const replyMessage = generateWatchReplyMessage(tweet.id, account.arnsName);
-      const replyId = await sendWatchReply(twitter, tweet.id, replyMessage);
+      const replyMessage = generateWatchReplyMessage(tweet.id, account.arnsName, account);
+      const replyId = await sendWatchReply(twitter, replyToTweetId, replyMessage);
 
       if (replyId) {
         console.log(`   💬 Reply sent: ${replyId}`);
@@ -224,7 +239,14 @@ async function reevaluatePendingPosts(account, ant, index) {
     if (thresholdResult.meets) {
       console.log(`   📈 Pending post ${pendingPost.postId} now meets thresholds (${formatMetricsForLog(metrics)})`);
 
-      const archiveResult = await archivePost(tweet, account, includes, ant, index);
+      // For search-based accounts, retrieve stored invoking user info from pending entry
+      const archiveOptions = {};
+      if (pendingPost.invokingUser) {
+        archiveOptions.invokingUser = pendingPost.invokingUser;
+        archiveOptions.replyToTweetId = pendingPost.mentionTweetId || tweet.id;
+      }
+
+      const archiveResult = await archivePost(tweet, account, includes, ant, index, archiveOptions);
 
       if (archiveResult.success) {
         removeFromPending(pendingState, twitterUsername, pendingPost.postId);
@@ -301,6 +323,175 @@ async function checkSelfReplies(posts, account, archivedPostIds, ant, index) {
 // ---------- process single account ----------
 
 async function processAccount(account) {
+  // Branch based on sourceType
+  if (account.sourceType === 'search') {
+    return processSearchBasedAccount(account);
+  }
+  return processTimelineBasedAccount(account);
+}
+
+// ---------- process search-based account (e.g., #baseposting) ----------
+
+async function processSearchBasedAccount(account) {
+  const { twitterUsername, arnsName, filtering } = account;
+  console.log(`\n${'═'.repeat(60)}`);
+  console.log(`🔍 Processing search: ${account.searchQuery} → ${arnsName}.ar.io`);
+
+  if (filtering?.enabled) {
+    console.log(`   🔍 Filtering: ${filtering.tier} tier (${filtering.pendingMaxAgeHours}h pending window)`);
+  }
+
+  const accountState = getAccountState(watchState, twitterUsername);
+  const lastTweetId = accountState.lastProcessedTweetId;
+
+  try {
+    // Get ANT instance for this account
+    const ant = getAntInstance(account);
+
+    // Load index once for batched updates
+    const index = loadWatchIndex(arnsName);
+
+    let archivedCount = 0;
+    let pendingCount = 0;
+    let lastProcessedId = lastTweetId;
+
+    // ========== PHASE 1: Search and process new posts ==========
+    const { posts, includes, newestId } = await pollSearchResults(
+      twitter,
+      account,
+      lastTweetId
+    );
+
+    if (posts.length === 0) {
+      console.log(`   ✅ No new posts matching query`);
+    } else {
+      console.log(`   📋 ${posts.length} new post(s) to archive`);
+
+      // Process each archive target (posts array contains { tweet, invokingUser, mentionTweetId, includes })
+      for (const target of posts) {
+        const { tweet, invokingUser, mentionTweetId, includes: targetIncludes } = target;
+
+        console.log(`\n   ${formatSearchResultForLog(target)}`);
+
+        // Check if already in index (deduplication)
+        const alreadyArchived = index.posts.some(p => p.postId === tweet.id);
+        if (alreadyArchived) {
+          console.log(`   ⏭️ Already archived, skipping`);
+          lastProcessedId = mentionTweetId; // Still update since_id
+          continue;
+        }
+
+        // Check if post should be archived (apply engagement filtering to parent tweet)
+        const decision = shouldArchiveImmediately(tweet, account, targetIncludes);
+
+        if (decision.archive) {
+          console.log(`   ✓ Archive: ${decision.reason}`);
+
+          const archiveResult = await archivePost(tweet, account, targetIncludes, ant, index, {
+            invokingUser,
+            replyToTweetId: mentionTweetId // Reply to the mention, not the parent
+          });
+
+          if (archiveResult.success) {
+            archivedCount++;
+            lastProcessedId = mentionTweetId;
+            updateAccountState(watchState, twitterUsername, {
+              lastProcessedTweetId: lastProcessedId
+            });
+          } else {
+            console.log(`   ⚠️ Will retry next cycle`);
+          }
+        } else if (decision.pending) {
+          // Add to pending queue (using parent tweet ID)
+          console.log(`   ⏳ Pending: ${formatMetricsForLog(decision.metrics)}`);
+
+          const pendingEntry = createPendingEntry(
+            tweet,
+            decision.metrics,
+            hasMedia(tweet, targetIncludes)
+          );
+          // Store invokingUser info in pending entry for later
+          pendingEntry.invokingUser = invokingUser;
+          pendingEntry.mentionTweetId = mentionTweetId;
+          addToPending(pendingState, twitterUsername, pendingEntry);
+          pendingCount++;
+
+          lastProcessedId = mentionTweetId;
+          updateAccountState(watchState, twitterUsername, {
+            lastProcessedTweetId: lastProcessedId
+          });
+        }
+
+        // Delay between posts
+        if (posts.indexOf(target) < posts.length - 1) {
+          await new Promise(resolve => setTimeout(resolve, POST_PROCESSING_DELAY_MS));
+        }
+      }
+
+      // Save state after processing all new posts
+      saveWatchState(watchState, WATCH_STATE_PATH);
+      savePendingState(pendingState, PENDING_STATE_PATH);
+    }
+
+    // ========== PHASE 2: Re-evaluate pending queue ==========
+    // Note: For search-based accounts, pending posts include invokingUser info
+    if (filtering?.enabled) {
+      const pendingResult = await reevaluatePendingPosts(account, ant, index);
+      archivedCount += pendingResult.archived;
+
+      if (pendingResult.archived > 0 || pendingResult.expired > 0 || pendingResult.deleted > 0) {
+        console.log(`   📊 Pending: ${pendingResult.archived} promoted, ${pendingResult.expired} expired, ${pendingResult.deleted} deleted`);
+      }
+    }
+
+    // ========== Save index and update ArNS ==========
+    if (archivedCount > 0) {
+      saveWatchIndex(arnsName, index);
+
+      console.log(`\n   📤 Updating ArNS records...`);
+
+      const indexResult = await uploadWatchIndex(ant, arnsName, jwk, DEFAULT_TTL_SECONDS);
+
+      if (!indexResult.success) {
+        console.error(`   ❌ Index upload failed: ${indexResult.error}`);
+      }
+    }
+
+    // Update state
+    const allPostsProcessed = posts.length === 0 ||
+      (archivedCount + pendingCount === posts.length);
+
+    updateAccountState(watchState, twitterUsername, {
+      lastProcessedTweetId: allPostsProcessed ? (newestId || lastProcessedId) : lastProcessedId,
+      lastCheckedAt: new Date().toISOString()
+    });
+    clearAccountError(watchState, twitterUsername);
+    saveWatchState(watchState, WATCH_STATE_PATH);
+    savePendingState(pendingState, PENDING_STATE_PATH);
+
+    // Summary
+    const pendingSummary = getPendingSummary(pendingState);
+    const accountPending = pendingSummary.byAccount[twitterUsername] || 0;
+
+    let summaryParts = [`${archivedCount} archived`];
+    if (pendingCount > 0) summaryParts.push(`${pendingCount} added to pending`);
+    if (accountPending > 0) summaryParts.push(`${accountPending} in pending queue`);
+
+    console.log(`   ✅ Completed: ${summaryParts.join(', ')}`);
+
+    return { success: true, newPosts: archivedCount, pending: accountPending };
+
+  } catch (error) {
+    console.error(`   ❌ Error: ${error.message}`);
+    recordAccountError(watchState, twitterUsername, error.message);
+    saveWatchState(watchState, WATCH_STATE_PATH);
+    return { success: false, error: error.message };
+  }
+}
+
+// ---------- process timeline-based account (original watch mode) ----------
+
+async function processTimelineBasedAccount(account) {
   const { twitterUsername, arnsName, filtering } = account;
   console.log(`\n${'═'.repeat(60)}`);
   console.log(`📡 Processing @${twitterUsername} → ${arnsName}.ar.io`);
