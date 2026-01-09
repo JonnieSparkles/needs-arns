@@ -3,8 +3,11 @@
   "description": "Success message when a post is archived via #baseposting",
   "template": [
     "Thanks for contributing to the community-sourced Baseposting Archive.",
+    "",
     "You've preserved {archiveCount} post(s) for the long term.",
+    "",
     "https://baseposting.ar.io/#/{postId}",
+    "",
     "Powered by @ar_io_network"
   ],
   "variables": ["postId", "archiveCount"],
