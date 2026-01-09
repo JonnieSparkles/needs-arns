@@ -2,13 +2,11 @@
   "type": "success-baseposting",
   "description": "Success message when a post is archived via #baseposting",
   "template": [
-    "Based. Permanently.",
-    "",
+    "Thanks for contributing to the community-sourced Baseposting Archive.",
+    "You've preserved {archiveCount} post(s) for the long term.",
     "https://baseposting.ar.io/#/{postId}",
-    "",
-    "Archive #{archiveCount} by @{invokingUsername}",
     "Powered by @ar_io_network"
   ],
-  "variables": ["postId", "archiveCount", "invokingUsername"],
+  "variables": ["postId", "archiveCount"],
   "maxLength": 280
 }
