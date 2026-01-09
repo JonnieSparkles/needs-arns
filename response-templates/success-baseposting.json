@@ -6,8 +6,9 @@
     "",
     "https://baseposting.ar.io/#/{postId}",
     "",
+    "Archive #{archiveCount} by @{invokingUsername}",
     "Powered by @ar_io_network"
   ],
-  "variables": ["postId"],
+  "variables": ["postId", "archiveCount", "invokingUsername"],
   "maxLength": 280
 }

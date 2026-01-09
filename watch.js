@@ -25,7 +25,8 @@ import {
   saveWatchIndex,
   addPostToIndexInMemory,
   uploadWatchIndex,
-  generateWatchReplyMessage
+  generateWatchReplyMessage,
+  countPostsByInvoker
 } from './lib/watch-archive.js';
 import {
   shouldArchiveImmediately,
@@ -168,7 +169,14 @@ async function archivePost(tweet, account, includes, ant, index, options = {}) {
 
     // Send reply if enabled
     if (account.replyToPost) {
-      const replyMessage = generateWatchReplyMessage(tweet.id, account.arnsName, account);
+      // For baseposting, include archive count for the invoking user
+      const invokingUsername = invokingUser?.username;
+      const archiveCount = invokingUsername ? countPostsByInvoker(index, invokingUsername) : null;
+
+      const replyMessage = generateWatchReplyMessage(tweet.id, account.arnsName, account, {
+        archiveCount,
+        invokingUsername
+      });
       const replyId = await sendWatchReply(twitter, replyToTweetId, replyMessage);
 
       if (replyId) {
