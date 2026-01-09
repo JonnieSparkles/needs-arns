@@ -17,8 +17,7 @@ OLD-archive.json
 archive/
 users.json
 
-# watch mode state/data
-watch-config.json
+# watch mode state/data (config is tracked, state is not)
 watch-state.json
 watch-pending-state.json
 watch-archive/
