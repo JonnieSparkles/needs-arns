@@ -26,6 +26,36 @@
   <link rel="icon" type="image/webp" href="base-favicon.webp">
 
   <style>
+    /* ========== Base Color System ========== */
+    :root {
+      /* Base Primary */
+      --base-blue: #0000ff;
+      --cerulean: #3c8aff;
+
+      /* Base Grays (light to dark) */
+      --gray-0: #ffffff;
+      --gray-10: #eef0f3;
+      --gray-15: #dee1e7;
+      --gray-30: #b1b7c3;
+      --gray-50: #717886;
+      --gray-60: #5b616e;
+      --gray-80: #32353d;
+      --gray-100: #0a0b0d;
+
+      /* Semantic tokens */
+      --bg-page: var(--gray-10);
+      --bg-card: var(--gray-0);
+      --bg-card-hover: var(--gray-10);
+      --bg-secondary: var(--gray-10);
+      --text-primary: var(--gray-100);
+      --text-secondary: var(--gray-60);
+      --text-muted: var(--gray-50);
+      --border-color: var(--gray-15);
+      --border-strong: var(--gray-30);
+      --accent: var(--base-blue);
+      --accent-hover: var(--cerulean);
+    }
+
     * {
       margin: 0;
       padding: 0;
@@ -34,8 +64,8 @@
 
     body {
       font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-      background-color: #000000;
-      color: #ffffff;
+      background-color: var(--bg-page);
+      color: var(--text-primary);
       line-height: 1.5;
       min-height: 100vh;
     }
@@ -50,14 +80,18 @@
     .header {
       text-align: center;
       padding: 24px 0 16px 0;
-      border-bottom: 1px solid #2f3336;
+      border-bottom: 1px solid var(--border-color);
       margin-bottom: 0;
+      background-color: var(--bg-card);
+      margin: -20px -20px 0 -20px;
+      padding: 24px 20px 16px 20px;
     }
 
     .header h1 {
       font-size: 28px;
       font-weight: 700;
       margin-bottom: 8px;
+      color: var(--text-primary);
     }
 
     .header .logo-img {
@@ -68,7 +102,7 @@
     }
 
     .header .tagline {
-      color: #71767a;
+      color: var(--text-secondary);
       font-size: 15px;
       margin-top: 12px;
     }
@@ -76,12 +110,14 @@
     .header .follow-link {
       display: inline-block;
       margin-top: 12px;
-      color: #1d9bf0;
+      color: var(--accent);
       text-decoration: none;
       font-size: 14px;
+      font-weight: 500;
     }
 
     .header .follow-link:hover {
+      color: var(--accent-hover);
       text-decoration: underline;
     }
 
@@ -89,15 +125,15 @@
     .loading {
       text-align: center;
       padding: 40px;
-      color: #71767a;
+      color: var(--text-secondary);
     }
 
     .loading .spinner {
       display: inline-block;
       width: 24px;
       height: 24px;
-      border: 2px solid #2f3336;
-      border-top-color: #ffffff;
+      border: 2px solid var(--border-strong);
+      border-top-color: var(--accent);
       border-radius: 50%;
       animation: spin 1s linear infinite;
       margin-bottom: 12px;
@@ -111,7 +147,7 @@
     .error {
       text-align: center;
       padding: 40px;
-      color: #f4212e;
+      color: #fc401f;
     }
 
     /* Post list */
@@ -122,16 +158,19 @@
     }
 
     .post-card {
-      background-color: #000000;
-      border: 1px solid #2f3336;
+      background-color: var(--bg-card);
+      border: 1px solid var(--border-color);
       border-radius: 16px;
       padding: 16px;
       cursor: pointer;
-      transition: background-color 0.2s;
+      transition: all 0.2s;
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
     }
 
     .post-card:hover {
-      background-color: #080808;
+      background-color: var(--bg-card);
+      border-color: var(--border-strong);
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
     }
 
     .post-card .post-header {
@@ -146,7 +185,7 @@
       height: 40px;
       border-radius: 50%;
       object-fit: cover;
-      background-color: #2f3336;
+      background-color: var(--gray-15);
     }
 
     .post-card .post-user {
@@ -158,17 +197,18 @@
     .post-card .post-username {
       font-weight: 700;
       font-size: 15px;
-      color: #ffffff;
+      color: var(--text-primary);
+      font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
     }
 
     .post-card .post-invoker {
       font-size: 13px;
-      color: #71767a;
+      color: var(--text-muted);
     }
 
     .post-card .post-date {
       font-size: 13px;
-      color: #71767a;
+      color: var(--text-muted);
     }
 
     .post-card .post-text {
@@ -176,13 +216,15 @@
       margin-bottom: 12px;
       white-space: pre-wrap;
       word-wrap: break-word;
+      color: var(--text-primary);
     }
 
     .post-card .post-media {
       margin-bottom: 12px;
-      border-radius: 16px;
+      border-radius: 12px;
       overflow: hidden;
-      background-color: #16181c;
+      background-color: var(--gray-15);
+      border: 1px solid var(--border-color);
     }
 
     .post-card .post-media img,
@@ -196,7 +238,7 @@
     .post-card .post-media .media-error {
       padding: 40px;
       text-align: center;
-      color: #71767a;
+      color: var(--text-muted);
       font-size: 14px;
     }
 
@@ -205,18 +247,22 @@
       justify-content: space-between;
       align-items: center;
       padding-top: 12px;
-      border-top: 1px solid #2f3336;
+      border-top: 1px solid var(--border-color);
     }
 
     .post-card .post-meta-item {
       font-size: 13px;
-      color: #71767a;
+      color: var(--text-muted);
     }
 
     .post-card .post-view-link {
       font-size: 13px;
-      color: #1d9bf0;
+      color: var(--accent);
       font-weight: 500;
+    }
+
+    .post-card:hover .post-view-link {
+      color: var(--accent-hover);
     }
 
     /* Load more button */
@@ -226,9 +272,9 @@
     }
 
     .load-more-btn {
-      background-color: transparent;
-      color: #1d9bf0;
-      border: 1px solid #1d9bf0;
+      background-color: var(--bg-card);
+      color: var(--accent);
+      border: 1px solid var(--accent);
       padding: 12px 24px;
       border-radius: 9999px;
       font-size: 15px;
@@ -238,7 +284,8 @@
     }
 
     .load-more-btn:hover {
-      background-color: rgba(29, 155, 240, 0.1);
+      background-color: var(--accent);
+      color: var(--gray-0);
     }
 
     .load-more-btn:disabled {
@@ -249,7 +296,7 @@
     .loading-batch {
       text-align: center;
       padding: 20px;
-      color: #71767a;
+      color: var(--text-secondary);
       font-size: 14px;
     }
 
@@ -257,26 +304,27 @@
     .stats {
       text-align: center;
       padding: 12px 16px;
-      color: #71767a;
+      color: var(--text-secondary);
       font-size: 14px;
-      border-bottom: 1px solid #2f3336;
+      border-bottom: 1px solid var(--border-color);
       margin-bottom: 16px;
     }
 
     /* Leaderboard */
     .leaderboard {
-      background-color: #000000;
-      border: 1px solid #2f3336;
+      background-color: var(--bg-card);
+      border: 1px solid var(--border-color);
       border-radius: 16px;
       padding: 16px;
       margin-bottom: 16px;
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
     }
 
     .leaderboard h3 {
       font-size: 18px;
       font-weight: 700;
       margin-bottom: 16px;
-      color: #ffffff;
+      color: var(--text-primary);
     }
 
     .leaderboard-list {
@@ -289,54 +337,62 @@
       display: flex;
       align-items: center;
       padding: 10px 0;
-      border-bottom: 1px solid #2f3336;
+      border-bottom: 1px solid var(--border-color);
+      cursor: pointer;
+      transition: all 0.2s;
+      margin: 0 -8px;
+      padding: 10px 8px;
+      border-radius: 8px;
     }
 
     .leaderboard-item:last-child {
       border-bottom: none;
     }
 
+    .leaderboard-item:hover {
+      background-color: var(--bg-secondary);
+    }
+
+    .leaderboard-item.active {
+      background-color: rgba(0, 0, 255, 0.08);
+      border-left: 3px solid var(--accent);
+    }
+
     .leaderboard-rank {
       font-size: 14px;
       font-weight: 700;
-      color: #71767a;
+      color: var(--text-muted);
       min-width: 24px;
       text-align: right;
       margin-right: 12px;
     }
 
-    .leaderboard-rank.top-1 { color: #ffd700; }
-    .leaderboard-rank.top-2 { color: #c0c0c0; }
-    .leaderboard-rank.top-3 { color: #cd7f32; }
+    /* Monochrome ranks - weight hierarchy instead of color */
+    .leaderboard-rank.top-1 {
+      color: var(--text-primary);
+      font-size: 16px;
+    }
+    .leaderboard-rank.top-2 {
+      color: var(--text-secondary);
+      font-size: 15px;
+    }
+    .leaderboard-rank.top-3 {
+      color: var(--text-secondary);
+    }
 
     .leaderboard-username {
       flex: 1;
       font-size: 14px;
       font-weight: 600;
-      color: #ffffff;
+      color: var(--text-primary);
+      font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
     }
 
     .leaderboard-count {
       font-size: 13px;
-      color: #71767a;
+      color: var(--text-muted);
       font-weight: 600;
       margin-left: 8px;
-    }
-
-    .leaderboard-item {
-      cursor: pointer;
-      transition: background-color 0.2s;
-      margin: 0 -8px;
-      padding: 10px 8px;
-      border-radius: 8px;
-    }
-
-    .leaderboard-item:hover {
-      background-color: #16181c;
-    }
-
-    .leaderboard-item.active {
-      background-color: #1d3a4d;
     }
 
     /* Filter indicator */
@@ -345,20 +401,21 @@
       align-items: center;
       justify-content: space-between;
       padding: 12px 16px;
-      background-color: #1d3a4d;
+      background-color: rgba(0, 0, 255, 0.08);
+      border: 1px solid var(--accent);
       border-radius: 8px;
       margin-bottom: 16px;
     }
 
     .filter-indicator span {
       font-size: 14px;
-      color: #ffffff;
+      color: var(--text-primary);
     }
 
     .filter-clear-btn {
       background: none;
-      border: 1px solid #1d9bf0;
-      color: #1d9bf0;
+      border: 1px solid var(--accent);
+      color: var(--accent);
       padding: 6px 12px;
       border-radius: 16px;
       font-size: 13px;
@@ -367,7 +424,8 @@
     }
 
     .filter-clear-btn:hover {
-      background-color: rgba(29, 155, 240, 0.1);
+      background-color: var(--accent);
+      color: var(--gray-0);
     }
 
     /* Back button */
@@ -377,18 +435,19 @@
       gap: 8px;
       margin-top: 16px;
       padding: 8px 16px;
-      background: none;
-      border: 1px solid #2f3336;
+      background: var(--bg-card);
+      border: 1px solid var(--border-strong);
       border-radius: 20px;
-      color: #ffffff;
+      color: var(--text-primary);
       font-size: 14px;
       cursor: pointer;
       margin-bottom: 16px;
-      transition: background-color 0.2s;
+      transition: all 0.2s;
     }
 
     .back-button:hover {
-      background-color: #181818;
+      border-color: var(--accent);
+      color: var(--accent);
     }
 
     /* Single post view */
@@ -424,17 +483,18 @@
     .username {
       font-weight: 700;
       font-size: 15px;
-      color: #ffffff;
+      color: var(--text-primary);
+      font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
     }
 
     .invoker-info {
       font-size: 13px;
-      color: #71767a;
+      color: var(--text-muted);
     }
 
     .date {
       font-size: 15px;
-      color: #71767a;
+      color: var(--text-muted);
       margin-left: auto;
     }
 
@@ -444,15 +504,17 @@
       margin-bottom: 12px;
       white-space: pre-wrap;
       word-wrap: break-word;
+      color: var(--text-primary);
     }
 
     /* Media grid */
     .media-grid {
       margin-bottom: 12px;
-      border-radius: 16px;
+      border-radius: 12px;
       overflow: hidden;
       display: grid;
       gap: 2px;
+      border: 1px solid var(--border-color);
     }
 
     .media-grid.single { grid-template-columns: 1fr; }
@@ -463,7 +525,7 @@
     .media-item {
       position: relative;
       width: 100%;
-      background-color: #000;
+      background-color: var(--gray-15);
       cursor: pointer;
     }
 
@@ -483,31 +545,34 @@
     .archive-footer {
       margin-top: 16px;
       padding-top: 16px;
-      border-top: 1px solid #2f3336;
+      border-top: 1px solid var(--border-color);
       font-size: 14px;
-      color: #71767a;
+      color: var(--text-secondary);
       text-align: center;
     }
 
     .archive-footer a {
-      color: #ffffff;
-      text-decoration: underline;
+      color: var(--accent);
+      text-decoration: none;
     }
 
     .archive-footer a:hover {
-      color: #1d9bf0;
+      color: var(--accent-hover);
+      text-decoration: underline;
     }
 
     .request-info {
       margin-top: 12px;
       padding: 12px;
-      background-color: #16181c;
+      background-color: var(--bg-secondary);
+      border: 1px solid var(--border-color);
       border-radius: 8px;
       font-size: 13px;
+      text-align: left;
     }
 
     .request-info strong {
-      color: #ffffff;
+      color: var(--text-primary);
     }
 
     /* Lightbox */
@@ -518,7 +583,7 @@
       left: 0;
       width: 100%;
       height: 100%;
-      background-color: rgba(0, 0, 0, 0.95);
+      background-color: rgba(10, 11, 13, 0.95);
       z-index: 1000;
       cursor: pointer;
       align-items: center;
@@ -539,10 +604,25 @@
       position: absolute;
       top: 20px;
       right: 30px;
-      color: #ffffff;
+      color: var(--gray-0);
       font-size: 40px;
       font-weight: bold;
       cursor: pointer;
+    }
+
+    /* Scrollbar styling */
+    ::-webkit-scrollbar {
+      width: 8px;
+    }
+    ::-webkit-scrollbar-track {
+      background: var(--bg-page);
+    }
+    ::-webkit-scrollbar-thumb {
+      background: var(--gray-30);
+      border-radius: 4px;
+    }
+    ::-webkit-scrollbar-thumb:hover {
+      background: var(--gray-50);
     }
   </style>
 </head>
@@ -570,7 +650,7 @@
 
       <!-- Leaderboard -->
       <div class="leaderboard" id="leaderboard" style="display: none;">
-        <h3>🏆 Top Archivists</h3>
+        <h3>Top Archivists</h3>
         <div class="leaderboard-list" id="leaderboard-list"></div>
       </div>
 

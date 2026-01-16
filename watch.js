@@ -153,12 +153,18 @@ function getAntInstance(account) {
 async function archivePost(tweet, account, includes, ant, index, options = {}) {
   const { invokingUser = null, replyToTweetId = tweet.id } = options;
 
+  // Use per-account template if configured, otherwise fall back to global default
+  const templateTxId = account.postTemplateTxId || WATCH_POST_TEMPLATE_TXID;
+  if (account.postTemplateTxId) {
+    console.log(`   📄 Using custom template: ${account.postTemplateTxId}`);
+  }
+
   const archiveResult = await archiveWatchedPost(
     tweet,
     account,
     includes,
     jwk,
-    WATCH_POST_TEMPLATE_TXID,
+    templateTxId,
     twitter, // Pass Twitter client for fetching quoted tweets
     invokingUser // Pass invoking user for search-based accounts
   );

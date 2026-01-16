@@ -1,0 +1,963 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Baseposting Archive</title>
+  <meta name="description" content="Baseposts, preserved by baseposters.">
+
+  <!-- Open Graph / Facebook -->
+  <meta property="og:type" content="article">
+  <meta property="og:title" content="Baseposting Archive" id="og-title">
+  <meta property="og:description" content="Baseposts, preserved by baseposters." id="og-description">
+  <meta property="og:image" content="" id="og-image">
+  <meta property="og:url" content="" id="og-url">
+  <meta property="og:site_name" content="Baseposting">
+
+  <!-- Twitter -->
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:site" content="@baseposting">
+  <meta name="twitter:title" content="Baseposting Archive" id="twitter-title">
+  <meta name="twitter:description" content="Baseposts, preserved by baseposters." id="twitter-description">
+  <meta name="twitter:image" content="" id="twitter-image">
+
+  <!-- Additional SEO -->
+  <meta name="robots" content="index, follow">
+  <meta name="author" content="Baseposting">
+  <link rel="icon" type="image/webp" href="https://baseposting.ar.io/base-favicon.webp">
+
+  <style>
+    /* ========== Base Color System ========== */
+    :root {
+      /* Base Primary */
+      --base-blue: #0000ff;
+      --cerulean: #3c8aff;
+
+      /* Base Grays (light to dark) */
+      --gray-0: #ffffff;
+      --gray-10: #eef0f3;
+      --gray-15: #dee1e7;
+      --gray-30: #b1b7c3;
+      --gray-50: #717886;
+      --gray-60: #5b616e;
+      --gray-80: #32353d;
+      --gray-100: #0a0b0d;
+
+      /* Semantic tokens */
+      --bg-page: var(--gray-10);
+      --bg-card: var(--gray-0);
+      --bg-secondary: var(--gray-10);
+      --text-primary: var(--gray-100);
+      --text-secondary: var(--gray-60);
+      --text-muted: var(--gray-50);
+      --border-color: var(--gray-15);
+      --border-strong: var(--gray-30);
+      --accent: var(--base-blue);
+      --accent-hover: var(--cerulean);
+    }
+
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      background-color: var(--bg-page);
+      color: var(--text-primary);
+      padding: 20px;
+      line-height: 1.5;
+    }
+
+    .container {
+      max-width: 600px;
+      margin: 0 auto;
+      background-color: var(--bg-card);
+      border: 1px solid var(--border-color);
+      border-radius: 16px;
+      padding: 16px;
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+    }
+
+    .loading {
+      text-align: center;
+      padding: 40px;
+      color: var(--text-secondary);
+    }
+
+    .error {
+      text-align: center;
+      padding: 40px;
+      color: #fc401f;
+    }
+
+    .manual-input {
+      margin-top: 24px;
+      padding: 24px;
+      background-color: var(--bg-secondary);
+      border-radius: 8px;
+      border: 1px solid var(--border-color);
+    }
+
+    .manual-input h3 {
+      font-size: 16px;
+      font-weight: 700;
+      color: var(--text-primary);
+      margin-bottom: 12px;
+    }
+
+    .manual-input p {
+      font-size: 14px;
+      color: var(--text-secondary);
+      margin-bottom: 16px;
+    }
+
+    .input-group {
+      margin-bottom: 12px;
+    }
+
+    .input-group label {
+      display: block;
+      font-size: 14px;
+      color: var(--text-primary);
+      margin-bottom: 6px;
+      font-weight: 500;
+    }
+
+    .input-group input {
+      width: 100%;
+      padding: 10px 12px;
+      background-color: var(--bg-card);
+      border: 1px solid var(--border-color);
+      border-radius: 4px;
+      color: var(--text-primary);
+      font-size: 14px;
+      font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+    }
+
+    .input-group input:focus {
+      outline: none;
+      border-color: var(--accent);
+    }
+
+    .input-group input::placeholder {
+      color: var(--text-muted);
+    }
+
+    .load-button {
+      width: 100%;
+      padding: 12px;
+      background-color: var(--accent);
+      color: var(--gray-0);
+      border: none;
+      border-radius: 4px;
+      font-size: 14px;
+      font-weight: 700;
+      cursor: pointer;
+      transition: background-color 0.2s;
+    }
+
+    .load-button:hover {
+      background-color: var(--accent-hover);
+    }
+
+    .load-button:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+
+    .tweet-header {
+      display: flex;
+      align-items: center;
+      margin-bottom: 12px;
+      gap: 8px;
+    }
+
+    .user-info {
+      display: flex;
+      flex-direction: column;
+    }
+
+    .username {
+      font-weight: 700;
+      font-size: 15px;
+      color: var(--text-primary);
+      font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+    }
+
+    .handle {
+      font-size: 15px;
+      color: var(--text-muted);
+    }
+
+    .date {
+      font-size: 15px;
+      color: var(--text-muted);
+      margin-left: auto;
+    }
+
+    .tweet-text {
+      font-size: 16px;
+      line-height: 1.5;
+      margin-bottom: 12px;
+      white-space: pre-wrap;
+      word-wrap: break-word;
+      color: var(--text-primary);
+    }
+
+    .media-grid {
+      margin-bottom: 12px;
+      border-radius: 12px;
+      overflow: hidden;
+      display: grid;
+      gap: 2px;
+      background-color: var(--gray-15);
+      border: 1px solid var(--border-color);
+    }
+
+    .media-grid.single { grid-template-columns: 1fr; }
+    .media-grid.double { grid-template-columns: repeat(2, 1fr); }
+    .media-grid.triple { grid-template-columns: repeat(2, 1fr); }
+    .media-grid.quad { grid-template-columns: repeat(2, 1fr); }
+
+    .media-item {
+      position: relative;
+      width: 100%;
+      background-color: var(--gray-15);
+      cursor: pointer;
+      transition: opacity 0.2s;
+    }
+
+    .media-item:hover {
+      opacity: 0.9;
+    }
+
+    .media-item.span-full {
+      grid-column: 1 / -1;
+    }
+
+    .media-item img,
+    .media-item video {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      display: block;
+    }
+
+    .media-item .expand-icon {
+      position: absolute;
+      top: 12px;
+      right: 12px;
+      background-color: rgba(10, 11, 13, 0.8);
+      border-radius: 50%;
+      width: 40px;
+      height: 40px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 18px;
+      cursor: pointer;
+      opacity: 0;
+      transition: opacity 0.2s;
+      pointer-events: auto;
+      z-index: 10;
+      border: 1px solid rgba(255, 255, 255, 0.3);
+      color: var(--gray-0);
+    }
+
+    .media-item:hover .expand-icon {
+      opacity: 1;
+    }
+
+    .video-error-fallback {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 12px;
+    }
+
+    .archive-footer {
+      margin-top: 16px;
+      padding-top: 16px;
+      border-top: 1px solid var(--border-color);
+      font-size: 14px;
+      color: var(--text-secondary);
+      text-align: center;
+    }
+
+    .archive-footer a {
+      color: var(--accent);
+      text-decoration: none;
+    }
+
+    .archive-footer a:hover {
+      color: var(--accent-hover);
+      text-decoration: underline;
+    }
+
+    .request-info {
+      margin-top: 12px;
+      padding: 12px;
+      background-color: var(--bg-secondary);
+      border: 1px solid var(--border-color);
+      border-radius: 8px;
+      font-size: 13px;
+      color: var(--text-secondary);
+      text-align: left;
+    }
+
+    .request-info strong {
+      color: var(--text-primary);
+    }
+
+    .request-info a {
+      color: var(--accent);
+      text-decoration: none;
+    }
+
+    .request-info a:hover {
+      color: var(--accent-hover);
+      text-decoration: underline;
+    }
+
+    /* Quoted tweet styles */
+    .quoted-tweet {
+      margin: 12px 0;
+      border: 1px solid var(--border-color);
+      border-radius: 16px;
+      padding: 12px;
+      background-color: var(--bg-secondary);
+    }
+
+    .quoted-tweet-header {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 8px;
+    }
+
+    .quoted-tweet-avatar {
+      width: 24px;
+      height: 24px;
+      border-radius: 50%;
+      background-color: var(--gray-15);
+    }
+
+    .quoted-tweet-username {
+      font-weight: 700;
+      font-size: 14px;
+      color: var(--text-primary);
+    }
+
+    .quoted-tweet-handle {
+      font-size: 14px;
+      color: var(--text-muted);
+    }
+
+    .quoted-tweet-text {
+      font-size: 14px;
+      line-height: 1.4;
+      color: var(--text-primary);
+      margin-bottom: 8px;
+      white-space: pre-wrap;
+      word-wrap: break-word;
+    }
+
+    .quoted-tweet-media {
+      margin-top: 8px;
+      border-radius: 12px;
+      overflow: hidden;
+      position: relative;
+      border: 1px solid var(--border-color);
+    }
+
+    .quoted-tweet-media img,
+    .quoted-tweet-media video {
+      width: 100%;
+      max-height: 300px;
+      object-fit: cover;
+      display: block;
+    }
+
+    .quoted-tweet-media .play-icon {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      font-size: 32px;
+      opacity: 0.8;
+      pointer-events: none;
+    }
+
+    .quoted-tweet-footer {
+      margin-top: 8px;
+      font-size: 12px;
+      color: var(--text-muted);
+    }
+
+    .quoted-tweet-footer a {
+      color: var(--accent);
+      text-decoration: none;
+    }
+
+    .quoted-tweet-footer a:hover {
+      color: var(--accent-hover);
+      text-decoration: underline;
+    }
+
+    .quoted-tweet-unavailable {
+      padding: 16px;
+      text-align: center;
+      color: var(--text-muted);
+      font-size: 14px;
+      border: 1px dashed var(--border-color);
+      border-radius: 12px;
+      margin: 12px 0;
+    }
+
+    /* Lightbox styles */
+    .lightbox {
+      display: none;
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background-color: rgba(10, 11, 13, 0.95);
+      z-index: 1000;
+      cursor: pointer;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .lightbox.active {
+      display: flex;
+    }
+
+    .lightbox-content {
+      max-width: 90vw;
+      max-height: 90vh;
+      object-fit: contain;
+    }
+
+    .lightbox-content video {
+      max-width: 90vw;
+      max-height: 90vh;
+      width: auto;
+      height: auto;
+    }
+
+    .lightbox-close {
+      position: absolute;
+      top: 20px;
+      right: 30px;
+      color: var(--gray-0);
+      font-size: 40px;
+      font-weight: bold;
+      cursor: pointer;
+      z-index: 1001;
+      line-height: 1;
+    }
+
+    .lightbox-close:hover {
+      opacity: 0.7;
+    }
+
+    /* Back to archive link */
+    .back-link {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 16px;
+      padding: 8px 16px;
+      background: var(--bg-card);
+      border: 1px solid var(--border-strong);
+      border-radius: 20px;
+      color: var(--text-primary);
+      font-size: 14px;
+      text-decoration: none;
+      transition: all 0.2s;
+    }
+
+    .back-link:hover {
+      border-color: var(--accent);
+      color: var(--accent);
+    }
+
+    /* Scrollbar styling */
+    ::-webkit-scrollbar {
+      width: 8px;
+    }
+    ::-webkit-scrollbar-track {
+      background: var(--bg-page);
+    }
+    ::-webkit-scrollbar-thumb {
+      background: var(--gray-30);
+      border-radius: 4px;
+    }
+    ::-webkit-scrollbar-thumb:hover {
+      background: var(--gray-50);
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <a href="https://baseposting.ar.io" class="back-link">← Back to Baseposting</a>
+
+    <div class="loading" id="loading">
+      Loading archive...
+    </div>
+
+    <div class="error" id="error" style="display: none;">
+      <div>Failed to load archive data</div>
+      <div class="manual-input">
+        <h3>Manual Load</h3>
+        <p>Enter either a manifest TXID or metadata.json TXID to load the archive:</p>
+        <div class="input-group">
+          <label for="manifest-txid">Manifest TXID (or metadata.json TXID):</label>
+          <input type="text" id="manifest-txid" placeholder="e.g. ABC123..." maxlength="43" pattern="[A-Za-z0-9_-]{43}">
+        </div>
+        <button class="load-button" id="load-button" onclick="loadFromTxId()">Load Archive</button>
+      </div>
+    </div>
+
+    <div id="tweet-content" style="display: none;">
+      <!-- Will be populated by JavaScript -->
+    </div>
+  </div>
+
+  <!-- Lightbox for expanded media -->
+  <div class="lightbox" id="lightbox" onclick="closeLightbox(event)">
+    <span class="lightbox-close" onclick="closeLightbox(event)">&times;</span>
+    <img class="lightbox-content" id="lightbox-img" src="" alt="Expanded media" onclick="event.stopPropagation();">
+    <video class="lightbox-content" id="lightbox-video" controls preload="auto" playsinline style="display: none;" onclick="event.stopPropagation();">
+      <source id="lightbox-video-source-mp4" src="" type="video/mp4">
+      <source id="lightbox-video-source-webm" src="" type="video/webm">
+      Your browser does not support the video tag.
+    </video>
+  </div>
+
+  <script>
+    // ========== Base64URL to Base32 conversion for sandbox subdomains ==========
+    const B32_ALPHABET = 'abcdefghijklmnopqrstuvwxyz234567';
+
+    function fromB64Url(b64url) {
+      const b64 = b64url.replace(/-/g, '+').replace(/_/g, '/');
+      const padded = b64 + '='.repeat((4 - b64.length % 4) % 4);
+      const binary = atob(padded);
+      const bytes = new Uint8Array(binary.length);
+      for (let i = 0; i < binary.length; i++) {
+        bytes[i] = binary.charCodeAt(i);
+      }
+      return bytes;
+    }
+
+    function toB32(bytes) {
+      let bits = 0;
+      let value = 0;
+      let output = '';
+      for (let i = 0; i < bytes.length; i++) {
+        value = (value << 8) | bytes[i];
+        bits += 8;
+        while (bits >= 5) {
+          output += B32_ALPHABET[(value >>> (bits - 5)) & 31];
+          bits -= 5;
+        }
+      }
+      if (bits > 0) {
+        output += B32_ALPHABET[(value << (5 - bits)) & 31];
+      }
+      return output;
+    }
+
+    function txToSandbox(txId) {
+      return toB32(fromB64Url(txId));
+    }
+
+    function getBaseGateway() {
+      const hostname = window.location.hostname;
+      const parts = hostname.split('.');
+      if (parts.length >= 2) {
+        return parts.slice(-2).join('.');
+      }
+      return hostname;
+    }
+
+    function getTxUrl(txId) {
+      const sandbox = txToSandbox(txId);
+      const baseGateway = getBaseGateway();
+      return `${window.location.protocol}//${sandbox}.${baseGateway}/${txId}`;
+    }
+
+    function detectGateway() {
+      const hostname = window.location.hostname;
+      if (hostname.includes('arweave.net')) {
+        return 'https://arweave.net';
+      }
+      if (hostname.includes('.')) {
+        const parts = hostname.split('.');
+        if (parts.length >= 3) {
+          const gatewayHost = parts.slice(1).join('.');
+          return `${window.location.protocol}//${gatewayHost}`;
+        } else {
+          return `${window.location.protocol}//${hostname}`;
+        }
+      }
+      return 'https://arweave.net';
+    }
+
+    const arweaveGateway = detectGateway();
+
+    function escapeHtml(text) {
+      if (!text) return '';
+      const map = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;' };
+      return text.replace(/[&<>"']/g, m => map[m]);
+    }
+
+    function formatDate(dateString) {
+      const date = new Date(dateString);
+      return date.toLocaleString('en-US', {
+        month: 'short', day: 'numeric', year: 'numeric',
+        hour: 'numeric', minute: '2-digit'
+      });
+    }
+
+    function generateMediaGrid(mediaArray) {
+      if (!mediaArray || mediaArray.length === 0) return '';
+
+      const count = mediaArray.length;
+      let gridClass = 'single';
+      if (count === 2) gridClass = 'double';
+      else if (count === 3) gridClass = 'triple';
+      else if (count >= 4) gridClass = 'quad';
+
+      let mediaItems = '';
+
+      mediaArray.slice(0, 4).forEach((media, index) => {
+        const spanFull = (count === 3 && index === 0) ? ' span-full' : '';
+        const mediaSrc = getTxUrl(media.txId);
+
+        if (media.type === 'photo' || media.type === 'link') {
+          const escapedSrc = mediaSrc.replace(/'/g, "\\'");
+          const escapedAlt = escapeHtml(media.alt_text || 'Image').replace(/'/g, "\\'");
+          mediaItems += `
+          <div class="media-item${spanFull}" onclick="openLightbox('${escapedSrc}', 'image', '${escapedAlt}')">
+            <img src="${mediaSrc}" alt="${escapeHtml(media.alt_text || 'Image')}">
+          </div>`;
+        } else if (media.type === 'video' || media.type === 'animated_gif') {
+          const isAnimatedGif = media.type === 'animated_gif';
+          const videoAttrs = isAnimatedGif ? 'autoplay loop muted playsinline' : 'controls preload="metadata" playsinline';
+          const escapedSrc = mediaSrc.replace(/'/g, "\\'");
+          const escapedAlt = escapeHtml(media.alt_text || 'Video').replace(/'/g, "\\'");
+          const clickHandler = isAnimatedGif ? `onclick="openLightbox('${escapedSrc}', 'video', '${escapedAlt}')"` : '';
+          const expandIcon = isAnimatedGif ? '' : `<div class="expand-icon" onclick="event.stopPropagation(); openLightbox('${escapedSrc}', 'video', '${escapedAlt}')">&#128269;</div>`;
+
+          mediaItems += `
+          <div class="media-item${spanFull}" ${clickHandler}>
+            ${expandIcon}
+            <video ${videoAttrs} style="width: 100%; height: 100%; object-fit: cover; display: block;">
+              <source src="${mediaSrc}" type="video/mp4">
+            </video>
+          </div>`;
+        }
+      });
+
+      return `<div class="media-grid ${gridClass}">${mediaItems}</div>`;
+    }
+
+    function expandUrls(text, entities) {
+      if (!entities?.urls || entities.urls.length === 0) return text;
+
+      let expandedText = text;
+      entities.urls.forEach(urlEntity => {
+        const expandedUrl = urlEntity.expanded_url || '';
+        const tcoUrl = urlEntity.url;
+        const isMediaLink = /\/status\/\d+\/(photo|video)\/\d+/i.test(expandedUrl) ||
+                            /^https?:\/\/(pic\.)?x\.com\//i.test(expandedUrl);
+
+        if (isMediaLink) {
+          expandedText = expandedText.replace(new RegExp(`\\s*${tcoUrl.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\s*`, 'g'), ' ').trim();
+        } else {
+          expandedText = expandedText.replace(tcoUrl, expandedUrl);
+        }
+      });
+
+      return expandedText.replace(/\s+/g, ' ').trim();
+    }
+
+    function generateQuotedTweetHTML(quotedTweetData) {
+      if (!quotedTweetData || !quotedTweetData.tweet) return '';
+
+      const { tweet, author, media } = quotedTweetData;
+      const username = author?.username || 'unknown';
+      const displayName = author?.name || username;
+      const text = tweet.text || '';
+      const profileImage = author?.profile_image_url || '';
+
+      let mediaHTML = '';
+      if (media && media.length > 0) {
+        const firstMedia = media[0];
+        const mediaSrc = firstMedia.txId ? getTxUrl(firstMedia.txId) : (firstMedia.url || firstMedia.preview_image_url);
+        if (mediaSrc && firstMedia.type === 'photo') {
+          mediaHTML = `
+            <div class="quoted-tweet-media">
+              <img src="${mediaSrc}" alt="${escapeHtml(firstMedia.alt_text || '')}" onerror="this.parentElement.style.display='none'">
+            </div>`;
+        }
+      }
+
+      const avatarHTML = profileImage
+        ? `<img class="quoted-tweet-avatar" src="${profileImage}" alt="@${escapeHtml(username)}" onerror="this.style.display='none'">`
+        : `<div class="quoted-tweet-avatar"></div>`;
+
+      return `
+        <div class="quoted-tweet">
+          <div class="quoted-tweet-header">
+            ${avatarHTML}
+            <span class="quoted-tweet-username">${escapeHtml(displayName)}</span>
+            <span class="quoted-tweet-handle">@${escapeHtml(username)}</span>
+          </div>
+          <div class="quoted-tweet-text">${escapeHtml(text)}</div>
+          ${mediaHTML}
+          <div class="quoted-tweet-footer">
+            <a href="https://x.com/${escapeHtml(username)}/status/${tweet.id}" target="_blank">View original on X</a>
+          </div>
+        </div>
+      `;
+    }
+
+    function renderTweet(metadata) {
+      const { rawApiResponse, archive, quotedTweet, display } = metadata;
+      const parentTweet = rawApiResponse.parentTweet || rawApiResponse.tweet;
+      const includes = rawApiResponse.includes || {};
+
+      let parentUsername = display?.username || 'unknown';
+      if (parentUsername === 'unknown' && parentTweet?.author_id) {
+        const parentUser = includes.users?.find(u => u.id === parentTweet.author_id);
+        if (parentUser?.username) parentUsername = parentUser.username;
+      }
+
+      const invokingUsername = display?.invokingUsername || null;
+      const parentText = parentTweet?.text || '';
+      const parentCreatedAt = parentTweet?.created_at || new Date().toISOString();
+      const parentEntities = parentTweet?.entities || null;
+
+      const tweetDate = formatDate(parentCreatedAt);
+      const mediaHTML = generateMediaGrid(archive.media);
+      const expandedText = expandUrls(parentText, parentEntities);
+
+      const invokerInfo = invokingUsername
+        ? `<strong>Archived by:</strong> <a href="https://x.com/${escapeHtml(invokingUsername)}" target="_blank">@${escapeHtml(invokingUsername)}</a><br>`
+        : '';
+
+      const html = `
+        <div class="tweet-header">
+          <div class="user-info">
+            <span class="username">@${escapeHtml(parentUsername)}</span>
+          </div>
+          <span class="date">${tweetDate}</span>
+        </div>
+
+        <div class="tweet-text">${escapeHtml(expandedText)}</div>
+
+        ${generateQuotedTweetHTML(quotedTweet)}
+
+        ${mediaHTML}
+
+        <div class="archive-footer">
+          <div>Archived on Arweave via <a href="https://baseposting.ar.io" target="_blank">#baseposting</a></div>
+          <div class="request-info">
+            <strong>Author:</strong> <a href="https://x.com/${escapeHtml(parentUsername)}" target="_blank">@${escapeHtml(parentUsername)}</a><br>
+            ${invokerInfo}
+            <strong>Original:</strong> <a href="https://x.com/${escapeHtml(parentUsername)}/status/${parentTweet?.id}" target="_blank">View on X</a>
+          </div>
+          <div style="margin-top: 8px; font-size: 12px; color: var(--text-muted);">
+            <a href="https://ar.io" target="_blank">ar.io</a> + <a href="https://arweave.org" target="_blank">Arweave</a>
+          </div>
+        </div>
+      `;
+
+      document.getElementById('tweet-content').innerHTML = html;
+      document.getElementById('tweet-content').style.display = 'block';
+
+      // Update page title and meta
+      const pageTitle = `@${parentUsername} - Baseposting Archive`;
+      const pageDescription = expandedText.length > 200 ? expandedText.substring(0, 197) + '...' : expandedText;
+      document.title = pageTitle;
+      document.querySelector('meta[name="description"]').setAttribute('content', pageDescription);
+      document.getElementById('og-title').setAttribute('content', pageTitle);
+      document.getElementById('og-description').setAttribute('content', pageDescription);
+      document.getElementById('og-url').setAttribute('content', window.location.href);
+      document.getElementById('twitter-title').setAttribute('content', pageTitle);
+      document.getElementById('twitter-description').setAttribute('content', pageDescription);
+
+      if (archive.media && archive.media.length > 0 && archive.media[0].type === 'photo') {
+        const imageUrl = getTxUrl(archive.media[0].txId);
+        document.getElementById('og-image').setAttribute('content', imageUrl);
+        document.getElementById('twitter-image').setAttribute('content', imageUrl);
+      }
+    }
+
+    async function fetchMetadataFromTxId(txId) {
+      try {
+        // Try manifest.json path first
+        let manifestData = null;
+
+        try {
+          const manifestPathResponse = await fetch(`${arweaveGateway}/${txId}/manifest.json`, {
+            headers: { 'Accept': 'application/json' }
+          });
+          if (manifestPathResponse.ok) {
+            const contentType = manifestPathResponse.headers.get('content-type') || '';
+            if (contentType.includes('json')) {
+              manifestData = await manifestPathResponse.json();
+            }
+          }
+        } catch (e) { /* ignore */ }
+
+        // Try direct fetch
+        if (!manifestData) {
+          try {
+            const directResponse = await fetch(`${arweaveGateway}/${txId}`, {
+              headers: { 'Accept': 'application/json' }
+            });
+            if (directResponse.ok) {
+              const text = await directResponse.text();
+              if (!text.trim().startsWith('<!') && !text.trim().startsWith('<html')) {
+                manifestData = JSON.parse(text);
+              }
+            }
+          } catch (e) { /* ignore */ }
+        }
+
+        if (!manifestData) {
+          throw new Error(`Unable to fetch manifest for TXID ${txId}`);
+        }
+
+        // Check if it's a manifest
+        if (manifestData.manifest === 'arweave/paths' && manifestData.paths && manifestData.paths['metadata.json']) {
+          const metadataTxId = manifestData.paths['metadata.json'].id;
+          const metadataResponse = await fetch(`${arweaveGateway}/${metadataTxId}`, {
+            headers: { 'Accept': 'application/json' }
+          });
+          if (!metadataResponse.ok) throw new Error(`Failed to fetch metadata`);
+          return await metadataResponse.json();
+        } else {
+          return manifestData;
+        }
+      } catch (error) {
+        console.error('Error fetching from TXID:', error);
+        throw error;
+      }
+    }
+
+    async function loadArchive() {
+      try {
+        const response = await fetch('./metadata.json');
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+
+        const metadata = await response.json();
+        renderTweet(metadata);
+        document.getElementById('loading').style.display = 'none';
+
+      } catch (error) {
+        console.error('Failed to load archive:', error);
+        document.getElementById('loading').style.display = 'none';
+        document.getElementById('error').style.display = 'block';
+      }
+    }
+
+    async function loadFromTxId() {
+      const txIdInput = document.getElementById('manifest-txid');
+      const loadButton = document.getElementById('load-button');
+      const txId = txIdInput.value.trim();
+
+      if (!txId || txId.length < 10) {
+        alert('Please enter a valid Arweave TXID');
+        return;
+      }
+
+      loadButton.disabled = true;
+      loadButton.textContent = 'Loading...';
+      document.getElementById('loading').style.display = 'block';
+      document.getElementById('error').style.display = 'none';
+
+      try {
+        const metadata = await fetchMetadataFromTxId(txId);
+        renderTweet(metadata);
+        document.getElementById('loading').style.display = 'none';
+        document.getElementById('error').style.display = 'none';
+      } catch (error) {
+        document.getElementById('loading').style.display = 'none';
+        document.getElementById('error').style.display = 'block';
+      } finally {
+        loadButton.disabled = false;
+        loadButton.textContent = 'Load Archive';
+      }
+    }
+
+    function openLightbox(src, type, alt) {
+      const lightbox = document.getElementById('lightbox');
+      const lightboxImg = document.getElementById('lightbox-img');
+      const lightboxVideo = document.getElementById('lightbox-video');
+      const lightboxVideoSourceMp4 = document.getElementById('lightbox-video-source-mp4');
+      const lightboxVideoSourceWebm = document.getElementById('lightbox-video-source-webm');
+
+      if (type === 'video') {
+        lightboxImg.style.display = 'none';
+        lightboxVideo.style.display = 'block';
+        lightboxVideoSourceMp4.src = src;
+        lightboxVideoSourceWebm.src = src;
+        lightboxVideo.load();
+        lightboxVideo.play().catch(() => {});
+      } else {
+        lightboxImg.style.display = 'block';
+        lightboxVideo.style.display = 'none';
+        lightboxVideo.pause();
+        lightboxImg.src = src;
+        lightboxImg.alt = alt;
+      }
+
+      lightbox.classList.add('active');
+      document.body.style.overflow = 'hidden';
+    }
+
+    function closeLightbox(event) {
+      if (event.target.classList.contains('lightbox-content')) return;
+
+      const lightbox = document.getElementById('lightbox');
+      const lightboxVideo = document.getElementById('lightbox-video');
+
+      lightbox.classList.remove('active');
+      document.body.style.overflow = '';
+
+      if (lightboxVideo) {
+        lightboxVideo.pause();
+        lightboxVideo.currentTime = 0;
+      }
+    }
+
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') {
+        const lightbox = document.getElementById('lightbox');
+        if (lightbox && lightbox.classList.contains('active')) {
+          closeLightbox({ target: lightbox });
+        }
+      }
+    });
+
+    document.addEventListener('DOMContentLoaded', () => {
+      loadArchive();
+
+      const txIdInput = document.getElementById('manifest-txid');
+      if (txIdInput) {
+        txIdInput.addEventListener('keypress', (e) => {
+          if (e.key === 'Enter') loadFromTxId();
+        });
+      }
+    });
+  </script>
+</body>
+</html>
