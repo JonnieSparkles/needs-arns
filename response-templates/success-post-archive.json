@@ -5,13 +5,12 @@
     "{fallbackMessage}",
     "🎉 Success! Your post is now permanently archived!",
     "",
-    "🌐 https://{undername}_{rootArnsName}.ar.io",
-    "🔗 ar://{undername}_{rootArnsName}",
+    "🔗 https://{rootArnsName}.ar.io/#/{path}",
     "📋 {manifestTxId}",
     "",
     "✨ Powered by @ArNSdomains"
   ],
-  "variables": ["undername", "rootArnsName", "manifestTxId", "fallbackMessage"],
+  "variables": ["path", "rootArnsName", "manifestTxId", "fallbackMessage"],
   "maxLength": 280,
   "fallback": "success-post-archive-truncated"
 }

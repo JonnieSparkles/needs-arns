@@ -5,11 +5,12 @@ import express from 'express';
 import fs from 'fs';
 import { requireEnv, getJwkFromEnv, isValidUndername, isInfrastructureErrorType, verifyTxIdExists, ARWEAVE_TXID_RE, ASSIGN_CMD_RE } from './lib/utils.js';
 import { uploadToArweave, uploadManifest, getTurboClient, getTurboBalanceWithShared, estimateUploadCostWinc, assertSufficientCredits } from './lib/arweave.js';
-import { createMentionArchive, updateMentionArchive, buildMetadataObject, uploadAndAssignArchiveIndex } from './lib/archive.js';
+import { createMentionArchive, updateMentionArchive, buildMetadataObject, getTweetUsername } from './lib/archive.js';
+import { loadMentionIndex, addToMentionIndex, isPathAvailable, saveMentionIndex, uploadMentionIndex, resetIndexState, hasIndexChanges } from './lib/mention-index.js';
 import { reply, retweet, getTwitterClient } from './lib/twitter.js';
-import { checkUndernameAvailability, createUndernameRecord } from './lib/arns.js';
+// Note: ArNS record creation removed - now using path-based routing via mention-index
 import { hasMediaAttachments, extractTxIdFromTweetData, getMediaUrls, processMediaFromTweet } from './lib/media.js';
-import { fetchParentTweet, fetchParentUser, isUserAllowed, extractCommandFromMention, handleAccessDenied, handleNameTaken, handleTxIdFailed } from './lib/mentions.js';
+import { fetchParentTweet, fetchParentUser, isUserAllowed, extractCommandFromMention, handleAccessDenied, handleTxIdFailed } from './lib/mentions.js';
 import { saveProcessedState, loadProcessedState } from './lib/state.js';
 import { renderTemplate } from './response-templates/loader.js';
 import { generateManifest } from './lib/manifest.js';
@@ -152,50 +153,37 @@ async function handleMention(twitterClient, mention, includes) {
     }
     console.log(`📝 Parent: ${parent.id}`);
     
-    const requestedUndername = command.undername;
-    console.log(`🏷️ Requested undername: ${requestedUndername}`);
+    // Determine path based on command type
+    // - 'auto' (please command): always use postId
+    // - 'assign'/'archive': use requested undername if available, fallback to postId
+    let requestedPath = command.undername;
+    let path;
+    let isFallback = false;
+
+    if (command.type === 'auto' || !requestedPath) {
+      // Auto mode: use postId as path
+      path = parent.id;
+      requestedPath = path;
+      console.log(`🏷️ Auto path (postId): ${path}`);
+    } else {
+      // Check if requested path is available in the index
+      console.log(`🏷️ Requested path: ${requestedPath}`);
+      if (!isPathAvailable(requestedPath)) {
+        console.log(`❌ Requested path taken in index: ${requestedPath}`);
+        path = parent.id;
+        isFallback = true;
+        console.log(`🔄 Using fallback path (postId): ${path}`);
+      } else {
+        path = requestedPath;
+        console.log(`✅ Requested path available: ${path}`);
+      }
+    }
 
     // Check user quota (test mode - tracking only, not blocking)
     const quotaCheck = checkQuota(authorId, mentionUsername, true);
     console.log(`📊 Quota check for @${mentionUsername}: ${quotaCheck.used}/${quotaCheck.limit} used (${quotaCheck.remaining} remaining) [${quotaCheck.tier} tier]`);
     if (quotaCheck.testMode && !quotaCheck.allowed) {
       console.log(`⚠️  [TEST MODE] User would be blocked, but allowing for testing`);
-    }
-
-    // Check if requested undername already exists BEFORE processing media
-    let undername = requestedUndername;
-    let isFallback = false;
-    const availability = await checkUndernameAvailability(ant, undername);
-    if (!availability.available) {
-      console.log(`❌ Requested name taken: ${undername}`);
-      
-      // Try parent tweet ID as fallback undername
-      const fallbackUndername = parent.id;
-      console.log(`🔄 Trying fallback undername: ${fallbackUndername}`);
-      const fallbackAvailability = await checkUndernameAvailability(ant, fallbackUndername);
-      
-      if (!fallbackAvailability.available) {
-        console.log(`❌ Fallback name also taken: ${fallbackUndername}`);
-        
-        // Record failed assignment (name taken)
-        processedDetails[mention.id] = {
-          mentionUsername: mentionUsername,
-          undername: requestedUndername,
-          success: false,
-          reason: 'undername_taken',
-          timestamp: new Date().toISOString()
-        };
-        
-        await handleNameTaken(twitterClient, mention.id, requestedUndername);
-        return;
-      }
-      
-      // Use fallback undername
-      undername = fallbackUndername;
-      isFallback = true;
-      console.log(`✅ Using fallback undername: ${undername}`);
-    } else {
-      console.log(`✅ Requested name available: ${undername}`);
     }
     
     // Check access control
@@ -213,118 +201,23 @@ async function handleMention(twitterClient, mention, includes) {
     }
 
     // Get user data for metadata
-    const mentionUser = includes?.users?.find(u => u.id === mention.author_id);
-    const parentUser = includes?.users?.find(u => u.id === parent.author_id);
+    // Use getTweetUsername which has fallback logic for when users aren't in includes
+    const mentionUserObj = includes?.users?.find(u => u.id === mention.author_id);
+    const parentUserObj = includes?.users?.find(u => u.id === parent.author_id);
+
+    // Get usernames with fallback (uses mention entities if user not in includes)
+    const resolvedMentionUsername = getTweetUsername(mention, includes);
+    const resolvedParentUsername = getTweetUsername(parent, includes, mention);
+
+    // Create user objects with resolved usernames for addToMentionIndex
+    const resolvedMentionUser = mentionUserObj || { username: resolvedMentionUsername };
+    const resolvedParentUser = parentUserObj || { username: resolvedParentUsername };
     
     // Determine content type and handle media/links
     let mediaArray = [];
     let isUploadedMedia = false;
     let existingTxId = extractTxIdFromTweetData(parent);
-    
-    // Handle "name this" command - direct assignment to existing TXID (no archive)
-    if (command.type === 'name') {
-      if (!existingTxId) {
-        console.log(`❌ No Arweave link found for "name this" command: ${mention.id}`);
-        const noLinkMsg = renderTemplate('error-no-arweave-link', {
-          undername: requestedUndername,
-          rootArnsName: ROOT_ARNS_NAME
-        });
-        await reply(twitterClient, mention.id, noLinkMsg || '❌ No Arweave link found in the parent post. Include a valid ar:// or arweave.net/<txid> link, or use "archive".');
-        return;
-      }
-      
-      // Verify existing TXID
-      console.log(`🔗 Found existing TXID for naming: ${existingTxId}`);
-      const ok = await verifyTxIdExists(existingTxId);
-      if (!ok) {
-        console.log(`❌ TXID verification failed: ${existingTxId}`);
-        await handleTxIdFailed(twitterClient, mention.id, existingTxId);
-        return;
-      }
-      console.log(`✅ TXID verified: ${existingTxId}`);
-      
-      // Directly assign undername -> existing TXID (no manifest/archive)
-      console.log(`🔗 Directly assigning ArNS: ${undername} → ${existingTxId}`);
-      const recordResult = await createUndernameRecord(ant, undername, existingTxId, DEFAULT_TTL_SECONDS);
-      if (!recordResult.success) {
-        if (recordResult.error === 'undername_taken') {
-          console.log(`❌ Undername '${undername}' is already taken`);
-          
-          // Record failed assignment (name taken)
-          processedDetails[mention.id] = {
-            mentionUsername: mentionUsername,
-            undername: requestedUndername,
-            success: false,
-            reason: 'undername_taken',
-            timestamp: new Date().toISOString()
-          };
-          
-          await handleNameTaken(twitterClient, mention.id, requestedUndername);
-          return;
-        }
-        throw new Error(recordResult.message);
-      }
-      
-      const onchainId = recordResult.recordId;
-      console.log(`✅ ArNS record created (direct assign): ${onchainId}`);
-      
-      // Record successful assignment (direct assignment)
-      processedDetails[mention.id] = {
-        mentionUsername: mentionUsername,
-        undername: undername,
-        txId: existingTxId,
-        onchainId: onchainId,
-        isUploadedMedia: false,
-        success: true,
-        directAssign: true,
-        timestamp: new Date().toISOString()
-      };
-      
-      // Reply with success message for direct assignment
-      console.log('💬 Sending success reply for direct assignment...');
-      const msg = renderTemplate('success-name-only', {
-        undername,
-        rootArnsName: ROOT_ARNS_NAME,
-        txId: existingTxId
-      });
-      
-      // Wait 1 minute before replying (keeps existing pacing)
-      console.log('⏳ Waiting 1 minute before replying...');
-      await new Promise(resolve => setTimeout(resolve, 60000));
 
-      const replyTweetId = await reply(twitterClient, mention.id, msg || `🎉 ${undername}_${ROOT_ARNS_NAME}.ar.io → ${existingTxId}`);
-
-      if (!replyTweetId) {
-        console.error(`❌ Failed to send reply to @${mentionUsername} for ${undername}`);
-      } else {
-        console.log(`✅ Successfully replied to @${mentionUsername} for ${undername}`);
-
-        // Track usage (test mode - logs only)
-        const usage = incrementUsage(authorId, undername);
-        if (usage) {
-          console.log(`📈 Usage updated: ${usage.used}/${usage.limit} this month, ${usage.lifetime} lifetime`);
-
-          // Check if we should show a quota message
-          const quotaMsg = getQuotaMessage(authorId);
-          if (quotaMsg) {
-            console.log(`💬 [INFO] Would append to reply:${quotaMsg}`);
-          }
-        }
-      }
-
-      // Retweet the success message to promote the assignment
-      if (replyTweetId && ENABLE_RETWEETS) {
-        console.log('🔄 Retweeting success message...');
-        await retweet(twitterClient, replyTweetId, BOT_USER_ID);
-      } else if (replyTweetId && !ENABLE_RETWEETS) {
-        console.log('📝 Retweets disabled via ENABLE_RETWEETS=false');
-      } else if (!replyTweetId) {
-        console.log('⚠️ Skipping retweet because reply failed');
-      }
-      
-      return;
-    }
-    
     if (existingTxId) {
       // Handle existing Arweave link flow (PRIORITY)
       console.log(`🔗 Found existing TXID: ${existingTxId}`);
@@ -384,8 +277,9 @@ async function handleMention(twitterClient, mention, includes) {
     }
 
     // Build metadata object
-    const metadataObj = buildMetadataObject(mention, parent, mentionUser, parentUser, mediaArray, includes);
-    metadataObj.metadata.undername = undername;
+    const metadataObj = buildMetadataObject(mention, parent, resolvedMentionUser, resolvedParentUser, mediaArray, includes);
+    metadataObj.metadata.undername = path; // Use path for backward compatibility
+    metadataObj.metadata.path = path;
     
     // Preflight check: estimate total cost for all uploads (metadata + manifest)
     console.log('🔍 Checking Turbo credit balance before uploads...');
@@ -424,46 +318,33 @@ async function handleMention(twitterClient, mention, includes) {
       jwk
     );
 
-    // Create ArNS record pointing to manifest
-    const recordResult = await createUndernameRecord(ant, undername, manifestTxId, DEFAULT_TTL_SECONDS);
-    if (!recordResult.success) {
-      if (recordResult.error === 'undername_taken') {
-        console.log(`❌ Undername '${undername}' is already taken (race condition or fallback also taken)`);
-        
-        // Record failed assignment (name taken)
-        // Use requested name for error message (fallback case already handled earlier)
-        processedDetails[mention.id] = {
-          mentionUsername: mentionUsername,
-          undername: requestedUndername,
-          success: false,
-          reason: 'undername_taken',
-          timestamp: new Date().toISOString()
-        };
-        
-        await handleNameTaken(twitterClient, mention.id, requestedUndername);
-        return;
-      }
-      throw new Error(recordResult.message);
-    }
+    // Add to mention index (path-based routing - no individual ArNS records)
+    addToMentionIndex({
+      path,
+      mentionId: mention.id,
+      manifestTxId,
+      metadataTxId,
+      mediaCount: mediaArray.length,
+      hasVideo: mediaArray.some(m => m.type === 'video' || m.type === 'animated_gif'),
+      isLegacyUndername: false
+    }, parent, resolvedMentionUser, resolvedParentUser);
+
+    console.log(`✅ Added to index: path='${path}'`);
     
-    const onchainId = recordResult.recordId;
-    console.log(`✅ ArNS record created: ${onchainId}`);
-    
-    // Update metadata object with final ArNS info
+    // Update metadata object with final archive info
     metadataObj.archive.htmlTxId = htmlTxId;
     metadataObj.archive.manifestTxId = manifestTxId;
-    metadataObj.archive.arnsRecordId = onchainId;
+    metadataObj.archive.metadataTxId = metadataTxId;
     metadataObj.archive.assignedAt = new Date().toISOString();
-    
+
     // Save individual mention archive
     await createMentionArchive(metadataObj);
-    
+
     // Record successful assignment in processed state
     processedDetails[mention.id] = {
       mentionUsername: mentionUsername,
-      undername: undername,
+      path: path,
       txId: manifestTxId,
-      onchainId: onchainId,
       isUploadedMedia: isUploadedMedia,
       success: true,
       timestamp: new Date().toISOString()
@@ -473,29 +354,29 @@ async function handleMention(twitterClient, mention, includes) {
     console.log('💬 Sending success reply...');
     const templateType = 'success-post-archive';
     const templateVars = {
-      undername,
+      path,
       rootArnsName: ROOT_ARNS_NAME,
       manifestTxId,
-      fallbackMessage: isFallback ? `Requested name was taken. Assigned parent post ID '${parent.id}' instead.` : ''
+      fallbackMessage: isFallback ? `Requested path was taken. Using post ID '${parent.id}' instead.` : ''
     };
-    
+
     const msg = renderTemplate(templateType, templateVars);
-    
+
     if (!msg) {
-      let fallbackMsg = `🎉 ${undername}_${ROOT_ARNS_NAME}.ar.io → ${manifestTxId}`;
+      let fallbackMsg = `🎉 ${ROOT_ARNS_NAME}.ar.io/#/${path} → ${manifestTxId}`;
       if (isFallback) {
-        fallbackMsg = `Requested name was taken. Assigned parent post ID '${parent.id}' instead.\n\n${fallbackMsg}`;
+        fallbackMsg = `Requested path was taken. Using post ID '${parent.id}' instead.\n\n${fallbackMsg}`;
       }
       console.log('⚠️ Template loading failed, using fallback message');
       const replyTweetId = await reply(twitterClient, mention.id, fallbackMsg);
 
       if (!replyTweetId) {
-        console.error(`❌ Failed to send fallback reply to @${mentionUsername} for ${undername}`);
+        console.error(`❌ Failed to send fallback reply to @${mentionUsername} for ${path}`);
       } else {
-        console.log(`✅ Successfully sent fallback reply to @${mentionUsername} for ${undername}`);
+        console.log(`✅ Successfully sent fallback reply to @${mentionUsername} for ${path}`);
 
         // Track usage (test mode - logs only)
-        const usage = incrementUsage(authorId, undername);
+        const usage = incrementUsage(authorId, path);
         if (usage) {
           console.log(`📈 Usage updated: ${usage.used}/${usage.limit} this month, ${usage.lifetime} lifetime`);
 
@@ -516,12 +397,12 @@ async function handleMention(twitterClient, mention, includes) {
     const replyTweetId = await reply(twitterClient, mention.id, msg);
 
     if (!replyTweetId) {
-      console.error(`❌ Failed to send archive reply to @${mentionUsername} for ${undername}`);
+      console.error(`❌ Failed to send archive reply to @${mentionUsername} for ${path}`);
     } else {
-      console.log(`✅ Successfully sent archive reply to @${mentionUsername} for ${undername}`);
+      console.log(`✅ Successfully sent archive reply to @${mentionUsername} for ${path}`);
 
       // Track usage (test mode - logs only)
-      const usage = incrementUsage(authorId, undername);
+      const usage = incrementUsage(authorId, path);
       if (usage) {
         console.log(`📈 Usage updated: ${usage.used}/${usage.limit} this month, ${usage.lifetime} lifetime`);
       }
@@ -597,6 +478,11 @@ async function pollMentionsForever() {
     
     console.log('🔒 Setting isPolling = true');
     isPolling = true;
+
+    // Reset and load the mention index at the start of each cycle
+    resetIndexState();
+    loadMentionIndex();
+
     try {
       // On first poll, don't use since_id to catch all recent mentions
       const actualSinceId = isFirstPoll ? undefined : sinceId;
@@ -607,7 +493,7 @@ async function pollMentionsForever() {
       const searchParams = {
         'tweet.fields': ['referenced_tweets', 'created_at', 'entities', 'text', 'author_id', 'attachments', 'public_metrics', 'lang', 'possibly_sensitive', 'conversation_id'],
         expansions: ['referenced_tweets.id', 'author_id', 'attachments.media_keys', 'referenced_tweets.id.attachments.media_keys'],
-        'user.fields': ['username', 'name', 'verified', 'public_metrics', 'created_at', 'description'],
+        'user.fields': ['username', 'name', 'verified', 'public_metrics', 'created_at', 'description', 'profile_image_url'],
         'media.fields': ['type', 'url', 'preview_image_url', 'width', 'height', 'variants', 'public_metrics', 'alt_text'],
         max_results: 100
       };
@@ -671,34 +557,29 @@ async function pollMentionsForever() {
           if (newMentions.length > 0) {
             console.log(`📋 Queuing ${newMentions.length} new mentions for processing`);
             const includes = res._realData?.includes || {};
-            let cycleHadSuccess = false;
             for (const m of newMentions) {
               processedMentions.add(m.id);
               await processMentionQueue(twitter, m, includes);
-              // Check if this mention was successfully processed AND it created an archive
-              // (exclude direct assignments from "name this" commands)
-              if (processedDetails[m.id]?.success === true && !processedDetails[m.id]?.directAssign) {
-                cycleHadSuccess = true;
-              }
               // Save state after each processed mention
               saveProcessedState(processedMentions, sinceId, processedDetails, PROCESSED_MENTIONS_FILE);
             }
             
-            // Upload and assign archive index at end of cycle ONLY if there were successful archives
-            if (cycleHadSuccess) {
-              console.log('📤 Uploading archive index at end of cycle...');
+            // Save and upload mention index at end of cycle if there were changes
+            if (hasIndexChanges()) {
+              console.log('📤 Saving and uploading mention index at end of cycle...');
               try {
-                const indexResult = await uploadAndAssignArchiveIndex(ant, jwk, ROOT_ARNS_NAME, DEFAULT_TTL_SECONDS);
+                saveMentionIndex();
+                const indexResult = await uploadMentionIndex(ant, jwk, ROOT_ARNS_NAME, DEFAULT_TTL_SECONDS);
                 if (indexResult.success) {
-                  console.log(`✅ Archive index updated: ${indexResult.txId}`);
+                  console.log(`✅ Mention index updated: ${indexResult.txId}`);
                 } else {
-                  console.warn(`⚠️ Archive index update failed (non-critical): ${indexResult.message || indexResult.error}`);
+                  console.warn(`⚠️ Mention index update failed (non-critical): ${indexResult.message || indexResult.error}`);
                 }
               } catch (error) {
-                console.warn(`⚠️ Archive index update error (non-critical): ${error.message}`);
+                console.warn(`⚠️ Mention index update error (non-critical): ${error.message}`);
               }
             } else {
-              console.log('⏭️ Skipping archive index upload - no successful archives this cycle');
+              console.log('⏭️ Skipping mention index upload - no changes this cycle');
             }
           }
         } else {

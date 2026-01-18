@@ -5,13 +5,12 @@
     "{fallbackMessage}",
     "🎉 Post archived!",
     "",
-    "📱 {undername}",
-    "🌐 {undername}_{rootArnsName}.ar.io",
+    "🔗 {rootArnsName}.ar.io/#/{path}",
     "📋 {manifestTxId}",
     "",
     "✨ @ArNSdomains"
   ],
-  "variables": ["undername", "rootArnsName", "manifestTxId", "fallbackMessage"],
+  "variables": ["path", "rootArnsName", "manifestTxId", "fallbackMessage"],
   "maxLength": 280
 }
 
