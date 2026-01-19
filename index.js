@@ -492,7 +492,7 @@ async function pollMentionsForever() {
       // Search for tweets mentioning @NeedsArNS, excluding retweets (we want original mentions only)
       const searchParams = {
         'tweet.fields': ['referenced_tweets', 'created_at', 'entities', 'text', 'author_id', 'attachments', 'public_metrics', 'lang', 'possibly_sensitive', 'conversation_id'],
-        expansions: ['referenced_tweets.id', 'author_id', 'attachments.media_keys', 'referenced_tweets.id.attachments.media_keys'],
+        expansions: ['referenced_tweets.id', 'author_id', 'attachments.media_keys', 'referenced_tweets.id.attachments.media_keys', 'referenced_tweets.id.author_id'],
         'user.fields': ['username', 'name', 'verified', 'public_metrics', 'created_at', 'description', 'profile_image_url'],
         'media.fields': ['type', 'url', 'preview_image_url', 'width', 'height', 'variants', 'public_metrics', 'alt_text'],
         max_results: 100

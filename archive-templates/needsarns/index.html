@@ -46,7 +46,7 @@
       text-align: center;
       padding: 24px 0 16px 0;
       border-bottom: 1px solid #2f3336;
-      margin-bottom: 0;
+      margin-bottom: 16px;
     }
 
     .header h1 {
@@ -68,6 +68,66 @@
 
     .header .tagline a:hover {
       text-decoration: underline;
+    }
+
+    /* Two-column layout for desktop */
+    .content-wrapper {
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+
+    .main-column {
+      flex: 1;
+      min-width: 0;
+    }
+
+    .sidebar {
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+
+    /* Desktop: two columns */
+    @media (min-width: 900px) {
+      .container {
+        max-width: 1100px;
+      }
+
+      .content-wrapper {
+        flex-direction: row;
+        align-items: flex-start;
+      }
+
+      .main-column {
+        flex: 1;
+        max-width: calc(100% - 320px);
+      }
+
+      .sidebar {
+        width: 300px;
+        flex-shrink: 0;
+        position: sticky;
+        top: 20px;
+        max-height: calc(100vh - 40px);
+        overflow-y: auto;
+      }
+
+      /* Hide mobile-only elements on desktop */
+      .mobile-only {
+        display: none;
+      }
+    }
+
+    /* Mobile: single column, sidebar first */
+    @media (max-width: 899px) {
+      .content-wrapper {
+        flex-direction: column-reverse;
+      }
+
+      .desktop-only {
+        display: none;
+      }
     }
 
     /* Loading state */
@@ -132,12 +192,14 @@
       border-radius: 50%;
       object-fit: cover;
       background-color: #2f3336;
+      flex-shrink: 0;
     }
 
     .post-card .post-user {
       display: flex;
       flex-direction: column;
       flex: 1;
+      min-width: 0;
     }
 
     .post-card .post-username {
@@ -154,6 +216,7 @@
     .post-card .post-date {
       font-size: 13px;
       color: #71767a;
+      flex-shrink: 0;
     }
 
     .post-card .post-text {
@@ -423,22 +486,46 @@
       cursor: pointer;
     }
 
-    /* Leaderboard */
-    .leaderboard {
+    /* Sidebar widgets */
+    .sidebar-widget {
       background-color: #16181c;
       border: 1px solid #2f3336;
       border-radius: 16px;
       padding: 16px;
-      margin-bottom: 16px;
     }
 
-    .leaderboard h3 {
+    .sidebar-widget h3 {
       font-size: 18px;
       font-weight: 700;
       margin-bottom: 16px;
       color: #ffffff;
     }
 
+    /* Search widget */
+    .search-widget {
+      padding: 12px;
+    }
+
+    .search-input {
+      width: 100%;
+      padding: 12px 16px;
+      background-color: #202327;
+      border: 1px solid #2f3336;
+      border-radius: 9999px;
+      color: #ffffff;
+      font-size: 15px;
+      outline: none;
+    }
+
+    .search-input:focus {
+      border-color: #1d9bf0;
+    }
+
+    .search-input::placeholder {
+      color: #71767a;
+    }
+
+    /* Leaderboard */
     .leaderboard-list {
       display: flex;
       flex-direction: column;
@@ -538,29 +625,21 @@
       color: #ffffff;
     }
 
-    /* Search */
-    .search-container {
-      padding: 12px 0;
-      border-bottom: 1px solid #2f3336;
-    }
-
-    .search-input {
-      width: 100%;
-      padding: 12px 16px;
-      background-color: #202327;
-      border: 1px solid #2f3336;
-      border-radius: 9999px;
-      color: #ffffff;
-      font-size: 15px;
-      outline: none;
-    }
-
-    .search-input:focus {
-      border-color: #1d9bf0;
-    }
-
-    .search-input::placeholder {
+    /* Sidebar footer */
+    .sidebar-footer {
+      text-align: center;
+      padding: 16px;
       color: #71767a;
+      font-size: 13px;
+    }
+
+    .sidebar-footer a {
+      color: #1d9bf0;
+      text-decoration: none;
+    }
+
+    .sidebar-footer a:hover {
+      text-decoration: underline;
     }
   </style>
 </head>
@@ -580,28 +659,48 @@
       <div>Failed to load archive</div>
     </div>
 
-    <!-- Post list view -->
+    <!-- Post list view with two-column layout -->
     <div class="post-list-view" id="post-list-view" style="display: none;">
-      <div class="stats" id="stats"></div>
+      <div class="content-wrapper">
+        <!-- Main column: posts -->
+        <div class="main-column">
+          <div class="stats" id="stats"></div>
 
-      <!-- Leaderboard -->
-      <div class="leaderboard" id="leaderboard" style="display: none;">
-        <h3>Top Archivists</h3>
-        <div class="leaderboard-list" id="leaderboard-list"></div>
-      </div>
+          <!-- Filter indicator -->
+          <div class="filter-indicator" id="filter-indicator" style="display: none;">
+            <span id="filter-text">Showing posts by @username</span>
+            <button class="filter-clear-btn" onclick="clearFilter()">Show All</button>
+          </div>
 
-      <!-- Filter indicator -->
-      <div class="filter-indicator" id="filter-indicator" style="display: none;">
-        <span id="filter-text">Showing posts by @username</span>
-        <button class="filter-clear-btn" onclick="clearFilter()">Show All</button>
-      </div>
+          <!-- Mobile search (hidden on desktop) -->
+          <div class="sidebar-widget search-widget mobile-only" style="margin-bottom: 16px;">
+            <input type="text" class="search-input" id="search-input-mobile" placeholder="Search archives..." oninput="handleSearch(event)">
+          </div>
 
-      <div class="search-container">
-        <input type="text" class="search-input" id="search-input" placeholder="Search by path or @username..." oninput="handleSearch(event)">
-      </div>
-      <div class="post-list" id="post-list"></div>
-      <div class="load-more-container" id="load-more-container" style="display: none;">
-        <button class="load-more-btn" id="load-more-btn" onclick="loadMorePosts()">Load More</button>
+          <div class="post-list" id="post-list"></div>
+          <div class="load-more-container" id="load-more-container" style="display: none;">
+            <button class="load-more-btn" id="load-more-btn" onclick="loadMorePosts()">Load More</button>
+          </div>
+        </div>
+
+        <!-- Sidebar: search + leaderboard -->
+        <div class="sidebar">
+          <!-- Search widget (desktop only) -->
+          <div class="sidebar-widget search-widget desktop-only">
+            <input type="text" class="search-input" id="search-input-desktop" placeholder="Search archives..." oninput="handleSearch(event)">
+          </div>
+
+          <!-- Leaderboard -->
+          <div class="sidebar-widget" id="leaderboard" style="display: none;">
+            <h3>Top Archivists</h3>
+            <div class="leaderboard-list" id="leaderboard-list"></div>
+          </div>
+
+          <!-- Sidebar footer -->
+          <div class="sidebar-footer">
+            Powered by <a href="https://ar.io" target="_blank">ar.io</a> + <a href="https://arweave.org" target="_blank">Arweave</a>
+          </div>
+        </div>
       </div>
     </div>
 
@@ -630,7 +729,7 @@
     let currentPage = 0;
     let isLoadingMore = false;
     let searchQuery = '';
-    let filterByUser = null; // Filter posts by mentionUsername
+    let filterByUser = null;
     const POSTS_PER_PAGE = 10;
     const metadataCache = new Map();
 
@@ -796,6 +895,9 @@
     // ========== Search ==========
     function handleSearch(event) {
       searchQuery = event.target.value.toLowerCase().trim();
+      // Sync both search inputs
+      document.getElementById('search-input-desktop').value = event.target.value;
+      document.getElementById('search-input-mobile').value = event.target.value;
       currentPage = 0;
       renderPostList(true);
     }
@@ -1022,7 +1124,7 @@
               <span class="post-username">@${escapeHtml(parentUsername)}</span>
               ${requesterLine}
             </div>
-            <span class="post-date">${formatRelativeDate(post.createdAt)}</span>
+            <span class="post-date">${formatRelativeDate(post.processedAt || post.createdAt)}</span>
           </div>
           <div class="post-text">${escapeHtml(text)}</div>
           ${mediaPreviewHtml}
@@ -1050,11 +1152,13 @@
         renderLeaderboard();
       }
 
-      // Filter and sort posts
+      // Filter and sort posts - always sort by processedAt descending (newest first)
       const filteredPosts = filterPosts(indexData.posts);
-      const sortedPosts = [...filteredPosts].sort((a, b) =>
-        new Date(b.processedAt || b.createdAt) - new Date(a.processedAt || a.createdAt)
-      );
+      const sortedPosts = [...filteredPosts].sort((a, b) => {
+        const dateA = new Date(a.processedAt || a.createdAt || 0);
+        const dateB = new Date(b.processedAt || b.createdAt || 0);
+        return dateB - dateA; // Newest first
+      });
 
       if (sortedPosts.length === 0) {
         const emptyMsg = searchQuery
@@ -1095,7 +1199,7 @@
       if (searchQuery) {
         statsText = `${sortedPosts.length} result${sortedPosts.length !== 1 ? 's' : ''} for "${searchQuery}"`;
       } else if (filterByUser) {
-        statsText = `${sortedPosts.length} of ${indexData.posts.length} posts by @${filterByUser}`;
+        statsText = `${sortedPosts.length} of ${indexData.posts.length} posts archived by @${filterByUser}`;
       } else {
         statsText = `${indexData.posts.length} post${indexData.posts.length !== 1 ? 's' : ''} archived • Last updated ${formatDate(indexData.metadata?.lastUpdated || new Date())}`;
       }
@@ -1253,7 +1357,7 @@
         ${mediaHTML}
 
         <div class="archive-footer">
-          <div><a href="https://x.com/NeedsArNS" target="_blank">@NeedsArNS</a> • <a href="https://ar.io" target="_blank">ar.io</a> + <a href="https://arweave.com" target="_blank">arweave</a></div>
+          <div><a href="https://x.com/NeedsArNS" target="_blank">@NeedsArNS</a> • <a href="https://ar.io" target="_blank">ar.io</a> + <a href="https://arweave.org" target="_blank">arweave</a></div>
           <div class="request-info">
             <strong>Path:</strong> /${escapeHtml(postIndex.path)}<br>
             <strong>Post ID:</strong> ${postIndex.postId}<br>
