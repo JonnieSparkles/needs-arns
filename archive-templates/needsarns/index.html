@@ -1050,9 +1050,10 @@
         const tweet = metadata.rawApiResponse?.parentTweet || metadata.rawApiResponse?.tweet || {};
         const archive = metadata.archive || {};
         const includes = metadata.rawApiResponse?.includes || {};
-        const entities = tweet.entities || null;
+        // For long tweets, entities and text are in note_tweet
+        const entities = tweet.note_tweet?.entities || tweet.entities || null;
 
-        const rawText = tweet.text || post.text || '';
+        const rawText = tweet.note_tweet?.text || tweet.text || post.text || '';
         const cleanedText = cleanTweetText(rawText, entities);
 
         // Get profile image URL from includes.users
@@ -1290,7 +1291,8 @@
       const tweet = rawApi.parentTweet || rawApi.tweet || {};
       const archive = metadata.archive || {};
       const includes = rawApi.includes || {};
-      const entities = tweet.entities || null;
+      // For long tweets, entities are in note_tweet
+      const entities = tweet.note_tweet?.entities || tweet.entities || null;
 
       // Get username and profile image from includes
       let username = postIndex.parentUsername || 'unknown';
@@ -1304,7 +1306,8 @@
       }
 
       const mentionUsername = postIndex.mentionUsername;
-      const rawText = tweet.text || '';
+      // For long tweets, full text is in note_tweet.text
+      const rawText = tweet.note_tweet?.text || tweet.text || '';
       const text = cleanTweetText(rawText, entities);
       const createdAt = tweet.created_at || postIndex.createdAt;
       const arnsName = getArnsName();
