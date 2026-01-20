@@ -350,6 +350,16 @@ async function handleMention(twitterClient, mention, includes) {
       timestamp: new Date().toISOString()
     };
 
+    // Upload index BEFORE replying so the link works when clicked
+    console.log('📤 Uploading index before reply...');
+    saveMentionIndex();
+    const indexUploadResult = await uploadMentionIndex(ant, jwk, ROOT_ARNS_NAME, DEFAULT_TTL_SECONDS);
+    if (indexUploadResult.success) {
+      console.log(`✅ Index uploaded: ${indexUploadResult.txId}`);
+    } else {
+      console.warn(`⚠️ Index upload failed (will retry at end of cycle): ${indexUploadResult.error}`);
+    }
+
     // Send success reply with manifest txId
     console.log('💬 Sending success reply...');
     const templateType = 'success-post-archive';
