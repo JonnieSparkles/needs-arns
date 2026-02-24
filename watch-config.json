@@ -1,6 +1,6 @@
 {
   "version": "1.0",
-  "pollIntervalMinutes": 30,
+  "pollIntervalMinutes": 120,
   "accounts": [
     {
       "twitterUsername": "elonmusk",
@@ -18,9 +18,9 @@
           "minReplies": 500,
           "minRetweets": 500
         },
-        "alwaysArchiveMedia": true,
+        "alwaysArchiveMedia": false,
         "archiveSelfReplies": true,
-        "pendingMaxAgeHours": 24
+        "pendingMaxAgeHours": 4
       }
     },
     {
